@@ -1,0 +1,21 @@
+# Build ESP-IDF
+build/
+managed_components/
+dependencies.lock
+sdkconfig.old
+
+# Build PC
+host/dist/
+host/*.exe
+host/race3d_records.bin
+
+# Divers
+build_log.txt
+_old/
+music_preview/
+*.zip
+.vscode/
+__pycache__/
+
+# Firmware : produit par la release (idf.py build), pas versionne
+sdcard_files/race3d/firmware.bin

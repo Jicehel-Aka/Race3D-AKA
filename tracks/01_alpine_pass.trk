@@ -1,0 +1,22 @@
+# Big hills, hairpins and a bumpy descent. Brake before the crests.
+name ALPINE PASS
+theme alpine
+music 1
+seed 1311
+bgseed 130
+
+straight SHORT
+road MEDIUM MEDIUM MEDIUM 0 HIGH
+curve MEDIUM HARD LOW
+road SHORT SHORT SHORT 0 -MED
+curve MEDIUM -MED MED
+curve SHORT HARD
+road LONG SHORT MEDIUM 0 -HIGH
+scurves HARD
+bumps
+curve MEDIUM MED HIGH
+curve MEDIUM HARD -MED
+road MEDIUM MEDIUM SHORT -EASY LOW
+curve SHORT HARD -LOW
+downhill LONG
+straight SHORT

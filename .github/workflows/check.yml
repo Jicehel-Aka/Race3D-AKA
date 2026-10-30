@@ -1,0 +1,37 @@
+name: Check
+
+# Vérifie à chaque push / PR que les circuits sont cohérents et que le jeu compile.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tracks-and-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: tracks_data.cpp à jour avec tracks/*.trk
+        run: |
+          python3 tools/gen_tracks.py
+          git diff --exit-code main/game/tracks_data.cpp main/game/track.h
+
+      - name: Compilation du moteur (sans SDL)
+        run: |
+          # Le moteur de jeu doit compiler proprement en C++17 (hors couche plateforme).
+          for f in track tracks_data; do
+            g++ -std=c++17 -Wall -Wextra -DHOST_BUILD -I main -I main/game -c main/game/$f.cpp -o /tmp/$f.o
+          done
+
+  firmware:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: idf.py build
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py build

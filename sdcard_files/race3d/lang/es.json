@@ -1,0 +1,12 @@
+{
+  "CTRL_STEER": "Cruceta/Stick: girar",
+  "CTRL_GAS": "A: acelerar",
+  "CTRL_BRAKE": "B / Abajo: frenar",
+  "CTRL_NITRO": "C / D / R1: nitro",
+  "CTRL_PAUSE": "RUN: pausa",
+  "MENU_GAME_SELECT": "Volver al menu",
+  "LOADER_OFF_1": "La consola se apagara.",
+  "LOADER_OFF_2": "Enciendela de nuevo",
+  "LOADER_OFF_3": "para abrir el loader.",
+  "LOADER_OFF_MANUAL": "Apaga la consola."
+}

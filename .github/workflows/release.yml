@@ -1,0 +1,198 @@
+name: Release
+
+# Release à la demande : Actions > Release > Run workflow
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (ex: 1.1.0, sans le 'v')"
+        required: true
+        type: string
+      notes:
+        description: "Notes de version (laisser vide = notes générées automatiquement)"
+        required: false
+        type: string
+      prerelease:
+        description: "Marquer comme pré-release"
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: "Créer en brouillon (à publier à la main)"
+        required: false
+        type: boolean
+        default: false
+      build_pc:
+        description: "Joindre aussi la version PC Windows (AKATurbo3D.exe)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Vérifications
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Valider le numéro de version
+        run: |
+          if ! echo "${{ inputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::Version invalide '${{ inputs.version }}' (attendu : 1.2.3)"; exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "::error::Le tag v${{ inputs.version }} existe déjà"; exit 1
+          fi
+
+      - name: Les circuits sont-ils à jour ?
+        run: |
+          python3 tools/gen_tracks.py
+          git diff --exit-code main/game/tracks_data.cpp main/game/track.h || {
+            echo "::error::tracks_data.cpp / track.h ne correspondent pas à tracks/*.trk. Lance 'python tools/gen_tracks.py' et commite."; exit 1; }
+
+  firmware:
+    name: Firmware ESP32-S3
+    needs: prepare
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compiler
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py build
+
+      - name: Préparer le dossier carte SD
+        shell: bash
+        run: |
+          set -e
+          BIN=build/race3d_aka.bin
+          test -f "$BIN"
+          mkdir -p dist/race3d
+          cp -r sdcard_files/race3d/. dist/race3d/
+          cp "$BIN" dist/race3d/firmware.bin
+          python3 - <<'PY'
+          import json, datetime
+          p = "dist/race3d/meta.json"
+          m = json.load(open(p, encoding="utf-8"))
+          m["version"] = "${{ inputs.version }}"
+          m["date"] = datetime.date.today().isoformat()
+          json.dump(m, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          open(p, "a").write("\n")
+          PY
+          cd dist && zip -r "../AKA-Turbo-3D-GP-v${{ inputs.version }}-sdcard.zip" race3d
+          cd .. && cp "$BIN" "AKA-Turbo-3D-GP-v${{ inputs.version }}-firmware.bin"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            AKA-Turbo-3D-GP-v${{ inputs.version }}-sdcard.zip
+            AKA-Turbo-3D-GP-v${{ inputs.version }}-firmware.bin
+
+  pc:
+    name: Version PC (Windows)
+    needs: prepare
+    if: ${{ inputs.build_pc }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-SDL2
+            zip
+      - name: Compiler
+        run: |
+          mkdir -p host/dist
+          g++ -O2 -std=c++17 -DHOST_BUILD -I main host/host_main.cpp main/game/*.cpp \
+              -o host/dist/AKATurbo3D.exe -static $(sdl2-config --static-libs)
+      - name: Archive
+        run: |
+          mkdir -p pc/AKATurbo3D
+          cp host/dist/AKATurbo3D.exe pc/AKATurbo3D/
+          cd pc && zip -r "../AKA-Turbo-3D-GP-v${{ inputs.version }}-pc-windows.zip" AKATurbo3D
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pc
+          path: AKA-Turbo-3D-GP-v${{ inputs.version }}-pc-windows.zip
+
+  tools:
+    name: Éditeur de circuits et docs
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive
+        run: |
+          mkdir -p t/track-tools
+          cp tools/track_editor.html tools/gen_tracks.py t/track-tools/
+          cp -r tracks t/track-tools/tracks
+          cp -r docs t/track-tools/docs
+          cd t && zip -r "../AKA-Turbo-3D-GP-v${{ inputs.version }}-track-tools.zip" track-tools
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tools
+          path: AKA-Turbo-3D-GP-v${{ inputs.version }}-track-tools.zip
+
+  publish:
+    name: Publier la release
+    needs: [firmware, pc, tools]
+    # pc peut être ignoré (build_pc=false) ; firmware et tools doivent réussir
+    if: ${{ !cancelled() && needs.firmware.result == 'success' && needs.tools.result == 'success' && (needs.pc.result == 'success' || needs.pc.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          NOTES: ${{ inputs.notes }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          set -e
+          ls -l artifacts
+          args=(--target "${GITHUB_SHA}" --title "AKA Turbo 3D Grand Prix v${VERSION}")
+          [ "$PRERELEASE" = "true" ] && args+=(--prerelease)
+          [ "$DRAFT" = "true" ] && args+=(--draft)
+          if [ -n "$NOTES" ]; then
+            printf '%s\n' "$NOTES" > notes.md
+          else
+            echo "Notes générées automatiquement." > notes.md
+            args+=(--generate-notes)
+          fi
+          cat >> notes.md <<'EOT'
+
+          ### Installation (console Gamebuino AKA)
+          Télécharger `*-sdcard.zip`, décompresser et copier le dossier `race3d` à la racine de la carte SD, puis lancer depuis le lanceur.
+
+          ### Autres fichiers
+          - `*-firmware.bin` : le binaire seul.
+          - `*-pc-windows.zip` : version PC (SDL2), si présente.
+          - `*-track-tools.zip` : éditeur de circuits 3D, script `gen_tracks.py`, circuits et documentation.
+          EOT
+          gh release create "v${VERSION}" artifacts/* "${args[@]}" --notes-file notes.md

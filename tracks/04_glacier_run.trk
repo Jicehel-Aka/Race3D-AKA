@@ -1,0 +1,25 @@
+# Mountain roller coaster: blind crests, fast sweepers and a long downhill finish.
+name GLACIER RUN
+theme alpine
+music 1
+seed 7351
+bgseed 212
+
+straight MEDIUM
+road MEDIUM SHORT MEDIUM 0 MED        # first climb
+curve MEDIUM EASY -LOW
+curve SHORT MED
+bumps                                 # rollers
+curve MEDIUM HARD MED
+road SHORT SHORT SHORT -MED -HIGH     # plunge
+road SHORT MEDIUM SHORT 0 LOW
+curve MEDIUM -MED
+curve MEDIUM MED LOW
+straight MEDIUM HIGH
+curve MEDIUM HARD -MED
+curve SHORT -HARD
+curve SHORT HARD
+road LONG SHORT MEDIUM EASY -HIGH
+straight SHORT
+downhill LONG
+straight LONG                         # long finish straight

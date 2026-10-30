@@ -1,0 +1,30 @@
+# Night race around the docks: flat-out straights, a bridge, a blind crest and a tight final chicane.
+name NIGHT HARBOR
+theme city
+music 2
+seed 9034
+bgseed 305
+
+straight LONG                         # start straight
+curve MEDIUM MED
+straight SHORT
+road 12 30 12 HARD 0                  # container corner
+straight MEDIUM LOW
+road MEDIUM SHORT MEDIUM 0 -LOW       # crest over the lock
+curve MEDIUM EASY
+road MEDIUM SHORT MEDIUM 0 MED       # the bridge: up...
+straight SHORT                        # ...flat top...
+road MEDIUM SHORT MEDIUM 0 -MED       # ...and down
+straight LONG                         # quay straight
+road 10 25 10 -HARD 0
+road 10 40 10 HARD 0
+curve LONG EASY                       # fast sweeper
+straight MEDIUM
+curve MEDIUM MED
+road SHORT SHORT SHORT -MED 0
+road SHORT MEDIUM SHORT HARD 0
+straight MEDIUM
+road 8 8 8 -HARD 0                    # final chicane
+road 8 8 8 HARD 0
+road 8 8 8 -HARD 0
+straight SHORT

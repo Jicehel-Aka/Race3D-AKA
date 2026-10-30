@@ -1,0 +1,32 @@
+# Technical seaside town circuit: quick esses, a climbing hairpin, a seafront straight and a harbour corner.
+name PALM BAY
+theme coast
+music 0
+seed 4217
+bgseed 58
+
+straight MEDIUM                       # grid and first corner
+curve SHORT MED
+road 10 10 10 -HARD 0                 # esses: left-right-left-right
+road 10 10 10 HARD 0
+road 10 10 10 -HARD 0
+road 10 10 10 HARD 0
+straight SHORT LOW                    # up to the bridge
+curve MEDIUM HARD LOW                 # climbing hairpin
+road SHORT MEDIUM SHORT 0 -MED        # long run down
+curve SHORT -EASY
+curve MEDIUM MED
+straight MEDIUM
+road 15 15 15 HARD 0                  # quick right
+road 15 15 15 -HARD 0                 # snap back left
+curve LONG EASY LOW                   # big sweeper along the beach
+road SHORT SHORT SHORT -MED -LOW
+road SHORT SHORT SHORT 0 MED          # blind crest on the seafront...
+road SHORT SHORT SHORT 0 -MED         # ...and straight back down
+straight LONG                         # flat-out seafront straight
+road 12 20 12 HARD 0                  # harbour corner
+curve SHORT -MED
+curve MEDIUM MED
+curve SHORT HARD
+curve MEDIUM -EASY                    # gentle left onto the grid
+straight SHORT

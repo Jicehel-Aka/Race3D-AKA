@@ -1,0 +1,12 @@
+{
+  "CTRL_STEER": "Pad/Stick: lenken",
+  "CTRL_GAS": "A: Gas geben",
+  "CTRL_BRAKE": "B / Unten: bremsen",
+  "CTRL_NITRO": "C / D / R1: Nitro",
+  "CTRL_PAUSE": "RUN: Pause",
+  "MENU_GAME_SELECT": "Zum Hauptmenu",
+  "LOADER_OFF_1": "Die Konsole schaltet ab.",
+  "LOADER_OFF_2": "Wieder einschalten, um",
+  "LOADER_OFF_3": "den Loader zu starten.",
+  "LOADER_OFF_MANUAL": "Konsole ausschalten."
+}

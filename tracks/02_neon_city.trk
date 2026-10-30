@@ -1,0 +1,23 @@
+# Night race: long boulevards that end in tight corners.
+name NEON CITY
+theme city
+music 2
+seed 1388
+bgseed 161
+
+straight MEDIUM
+road 10 40 10 HARD 0
+straight LONG
+road 10 40 10 HARD 0
+bumps
+road 10 30 10 -HARD 0
+road 10 50 10 HARD LOW
+straight MEDIUM -LOW
+road 10 40 10 HARD 0
+scurves MED
+straight LONG
+road 10 40 10 HARD 0
+road SHORT SHORT SHORT -MED 0
+road SHORT SHORT SHORT HARD 0
+downhill SHORT
+straight MEDIUM

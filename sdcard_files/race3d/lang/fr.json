@@ -1,0 +1,12 @@
+{
+  "CTRL_STEER": "Croix/Stick: diriger",
+  "CTRL_GAS": "A: accelerer",
+  "CTRL_BRAKE": "B / Bas: freiner",
+  "CTRL_NITRO": "C / D / R1: nitro",
+  "CTRL_PAUSE": "RUN: pause",
+  "MENU_GAME_SELECT": "Retour au menu",
+  "LOADER_OFF_1": "La console va s'eteindre.",
+  "LOADER_OFF_2": "Rallumez-la pour revenir",
+  "LOADER_OFF_3": "au loader.",
+  "LOADER_OFF_MANUAL": "Eteignez la console."
+}

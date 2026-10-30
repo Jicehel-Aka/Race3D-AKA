@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "race3d",
+  "title": "AKA Turbo 3D Grand Prix",
+  "version": "1.0.0",
+  "platform": "Gamebuino AKA",
+  "port_level": "native",
+  "author": "jeancharleslebeau",
+  "license": "MIT",
+  "description": "Pseudo-3D arcade racer with 3 tracks, 7 AI drivers and 4 difficulty levels.",
+  "supports_save": true,
+  "supports_screenshot": true,
+  "supports_languages": true,
+  "supports_pause": true,
+  "save_directory": "/sdcard/race3d/"
+}

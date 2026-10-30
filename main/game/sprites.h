@@ -1,0 +1,39 @@
+// sprites.h - procedurally generated, palette-indexed pixel art.
+// Index 0 is transparent, index 255 darkens what is behind (soft shadow).
+#pragma once
+#include <stdint.h>
+
+enum SpriteId : uint8_t {
+    SPR_CAR, SPR_CAR_LEFT, SPR_CAR_RIGHT,
+    SPR_PALM, SPR_PINE, SPR_TREE, SPR_BUSH, SPR_ROCK,
+    SPR_BOARD_A, SPR_BOARD_B, SPR_BOARD_C,
+    SPR_CHEVRON, SPR_LAMP,
+    SPR_BUILDING_A, SPR_BUILDING_B, SPR_BUILDING_C,
+    SPR_GANTRY,
+    SPR_COUNT
+};
+
+struct Sprite {
+    int16_t w = 0, h = 0;
+    uint8_t* px = nullptr;
+    float worldW = 1000;     // width in world units (road half width = 2000)
+    float hitW = 0.5f;       // fraction of worldW that is solid
+    uint16_t emissive = 0;   // bitmask of palette indices that ignore ambient light
+};
+
+extern Sprite g_sprites[SPR_COUNT];
+
+void sprites_init();
+
+// Palette with 16 entries for a scenery sprite in the given theme (0..2).
+const uint16_t* sprite_palette(int id, int theme);
+
+// Car livery palette.
+struct Livery { uint16_t body, stripe; };
+void car_palette(uint16_t out[16], const Livery& l, bool braking);
+
+// Car palette index of the tail lights (to light them up)
+constexpr int CAR_TAIL = 9, CAR_TAIL_B = 10;
+
+// Scaled blit. (x, y) top-left, (dw, dh) destination size, rows >= clipY hidden.
+void blit(const Sprite& s, const uint16_t* pal, int x, int y, int dw, int dh, int clipY, bool flip);

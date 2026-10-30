@@ -1,0 +1,23 @@
+# Fast sweepers along the sea. A gentle first circuit: wide bends, a few small hills.
+name SUNSET COAST
+theme coast
+music 0
+seed 1234
+bgseed 99
+
+straight SHORT
+curve MEDIUM EASY
+road SHORT MEDIUM SHORT 0 LOW
+curve MEDIUM MED -LOW
+straight MEDIUM
+scurves MED
+curve LONG EASY MED
+road MEDIUM MEDIUM MEDIUM -EASY -MED
+straight LONG
+curve MEDIUM HARD
+road SHORT SHORT SHORT 0 LOW
+curve MEDIUM MED -LOW
+curve SHORT -MED
+curve MEDIUM MED
+downhill MEDIUM
+straight SHORT

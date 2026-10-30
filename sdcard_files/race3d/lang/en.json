@@ -1,0 +1,12 @@
+{
+  "CTRL_STEER": "Pad/Stick: steer",
+  "CTRL_GAS": "A: accelerate",
+  "CTRL_BRAKE": "B / Down: brake",
+  "CTRL_NITRO": "C / D / R1: nitro",
+  "CTRL_PAUSE": "RUN: pause",
+  "MENU_GAME_SELECT": "Back to main menu",
+  "LOADER_OFF_1": "The console will power off.",
+  "LOADER_OFF_2": "Turn it back on to",
+  "LOADER_OFF_3": "open the loader.",
+  "LOADER_OFF_MANUAL": "Switch the console off."
+}

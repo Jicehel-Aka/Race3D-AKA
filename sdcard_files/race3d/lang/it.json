@@ -1,0 +1,12 @@
+{
+  "CTRL_STEER": "Croce/Stick: sterzare",
+  "CTRL_GAS": "A: accelerare",
+  "CTRL_BRAKE": "B / Giu: frenare",
+  "CTRL_NITRO": "C / D / R1: nitro",
+  "CTRL_PAUSE": "RUN: pausa",
+  "MENU_GAME_SELECT": "Torna al menu",
+  "LOADER_OFF_1": "La console si spegnera.",
+  "LOADER_OFF_2": "Riaccendila per aprire",
+  "LOADER_OFF_3": "il loader.",
+  "LOADER_OFF_MANUAL": "Spegni la console."
+}
