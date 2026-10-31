@@ -12,5 +12,7 @@ void fx_update(const Race& r, float dt);
 void fx_draw();
 void fx_clear();
 void fx_burst(int x, int y, int n, uint16_t c, float speed, float life);
+void fx_emit(const Race& r);                 // impact effects for r.ev (what was hit decides the look)
+void fx_flash(uint16_t c, float strength);   // brief full-screen flash
 
 void format_time(char* out, float t);   // 1'23"45

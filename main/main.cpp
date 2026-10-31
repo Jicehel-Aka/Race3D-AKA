@@ -67,6 +67,10 @@ void playSfx(int id) {
     s_synth.play(id);
     if (id == SFX_CRASH) s_player.vibrator(180);
     else if (id == SFX_BUMP) s_player.vibrator(70);
+    else if (id == SFX_HIT_HEAVY || id == SFX_HIT_ROCK) s_player.vibrator(220);
+    else if (id == SFX_HIT_WOOD || id == SFX_HIT_METAL || id == SFX_HIT_ICE) s_player.vibrator(140);
+    else if (id == SFX_HIT_SOFT) s_player.vibrator(50);
+    else if (id == SFX_SCRAPE) s_player.vibrator(80);
 }
 void playMusic(int song, bool restart) { s_synth.setSong(song, restart); }
 void setMusicVolume(float v) { s_synth.setMusicVolume(v); }

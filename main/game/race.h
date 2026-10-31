@@ -35,8 +35,26 @@ struct Car {
     int place = 0;
 };
 
+// what the player hit: drives the particles, the sound and the physics of the impact
+enum HitKind : uint8_t {
+    HIT_NONE = 0,
+    HIT_SOFT,        // bushes, flowers, hay, snow men, parasols: the car ploughs through
+    HIT_WOOD,        // trunks, fences, crates, huts
+    HIT_ROCK,
+    HIT_METAL,       // posts, billboards, barriers, lamps
+    HIT_ICE,
+    HIT_HEAVY,       // buildings, containers, cranes, lighthouse
+    HIT_CAR_REAR,    // shunting another car
+    HIT_CAR_SIDE     // side-swiping another car
+};
+
 struct RaceEvents {     // things the renderer / game wants to react to this frame
     bool crash = false, bump = false, lap = false, bestLap = false, finalLap = false, finished = false;
+    uint8_t hit = HIT_NONE;     // set together with crash / bump
+    int8_t hitSide = 0;         // -1 / +1 : side of the player where the contact happened
+    uint8_t hitSpr = 0;         // sprite id of the obstacle (scenery hits)
+    float hitPower = 0;         // 0..1 impact strength
+    uint16_t hitColor = 0;      // paint of the other car (car hits)
 };
 
 class Race {
@@ -56,6 +74,8 @@ public:
     float steer = 0;            // smoothed player steering, -1..1
     float skyOffset = 0, nearOffset = 0;
     float shake = 0;
+    float spinT = 0; int spinDir = 0;     // brief yaw of the player's car after an impact
+    float smokeT = 0;                      // damage smoke after a hard hit
     float offroad = 0, skid = 0;
     int gear = 1;
     float rpm = 0;

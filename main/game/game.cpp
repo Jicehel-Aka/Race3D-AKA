@@ -294,12 +294,15 @@ void audio_update() {
 
 void handle_events() {
     const RaceEvents& e = g_race.ev;
-    if (e.crash) {
+    if (e.hit) {
+        static const int sfx[] = { 0, plat::SFX_HIT_SOFT, plat::SFX_HIT_WOOD, plat::SFX_HIT_ROCK, plat::SFX_HIT_METAL,
+                                   plat::SFX_HIT_ICE, plat::SFX_HIT_HEAVY, plat::SFX_BUMP, plat::SFX_SCRAPE };
+        plat::playSfx(sfx[e.hit]);
+        fx_emit(g_race);
+    } else if (e.crash) {
         plat::playSfx(plat::SFX_CRASH);
         fx_burst(W / 2 + (g_race.player().x > 0 ? 50 : -50), H - 40, 22, rgb(255, 220, 90), 140, 0.6f);
-        fx_burst(W / 2, H - 30, 10, rgb(200, 200, 200), 60, 0.9f);
-    }
-    if (e.bump) {
+    } else if (e.bump) {
         plat::playSfx(plat::SFX_BUMP);
         fx_burst(W / 2, H - 70, 10, rgb(255, 230, 120), 110, 0.4f);
     }

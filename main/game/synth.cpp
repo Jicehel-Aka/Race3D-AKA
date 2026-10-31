@@ -10,7 +10,23 @@ static const Synth::Step kBeepHigh[] = { S(880, 880, 0.5f, 0.7f, 0) };
 static const Synth::Step kMove[] = { S(1100, 1500, 0.25f, 0.04f, 0) };
 static const Synth::Step kOk[] = { S(660, 660, 0.3f, 0.06f, 0), S(990, 990, 0.3f, 0.12f, 0) };
 static const Synth::Step kCrash[] = { S(900, 120, 0.9f, 0.45f, 1), S(120, 40, 0.5f, 0.3f, 0) };
-static const Synth::Step kBump[] = { S(600, 200, 0.6f, 0.12f, 1) };
+static const Synth::Step kBump[] = { S(700, 200, 0.6f, 0.10f, 1), S(130, 70, 0.5f, 0.14f, 0) };
+static const Synth::Step kBumpB[] = { S(180, 80, 0.7f, 0.12f, 2) };
+// impacts by material: a main program and a layered second one
+static const Synth::Step kSoftA[] = { S(180, 90, 0.35f, 0.16f, 1), S(110, 60, 0.22f, 0.22f, 1) };
+static const Synth::Step kSoftB[] = { S(140, 70, 0.30f, 0.10f, 2) };
+static const Synth::Step kWoodA[] = { S(1800, 600, 0.5f, 0.03f, 1), S(330, 300, 0.35f, 0.04f, 0), S(90, 60, 0.5f, 0.18f, 1), S(250, 230, 0.3f, 0.05f, 0) };
+static const Synth::Step kWoodB[] = { S(200, 70, 0.7f, 0.14f, 2), S(70, 45, 0.5f, 0.2f, 0) };
+static const Synth::Step kRockA[] = { S(2400, 400, 0.55f, 0.05f, 1), S(70, 40, 0.6f, 0.35f, 1) };
+static const Synth::Step kRockB[] = { S(110, 35, 0.8f, 0.30f, 0), S(60, 30, 0.7f, 0.35f, 2) };
+static const Synth::Step kMetalA[] = { S(1250, 1180, 0.5f, 0.05f, 0), S(900, 880, 0.45f, 0.08f, 0), S(1320, 1300, 0.35f, 0.12f, 0) };
+static const Synth::Step kMetalB[] = { S(3000, 1200, 0.5f, 0.06f, 1), S(500, 200, 0.4f, 0.2f, 1) };
+static const Synth::Step kIceA[] = { S(3600, 1800, 0.4f, 0.03f, 1), S(2800, 1200, 0.35f, 0.05f, 1), S(3900, 3200, 0.3f, 0.04f, 0), S(3000, 2400, 0.25f, 0.06f, 0) };
+static const Synth::Step kIceB[] = { S(150, 70, 0.55f, 0.16f, 2), S(4400, 2000, 0.3f, 0.12f, 1) };
+static const Synth::Step kHeavyA[] = { S(1500, 300, 0.7f, 0.08f, 1), S(80, 35, 0.7f, 0.5f, 1) };
+static const Synth::Step kHeavyB[] = { S(90, 30, 0.9f, 0.45f, 0), S(55, 28, 0.7f, 0.4f, 2) };
+static const Synth::Step kScrapeA[] = { S(2600, 2000, 0.35f, 0.12f, 1), S(2200, 1500, 0.30f, 0.14f, 1), S(1800, 1400, 0.25f, 0.12f, 1) };
+static const Synth::Step kScrapeB[] = { S(1100, 800, 0.15f, 0.34f, 3) };
 static const Synth::Step kNitro[] = { S(300, 3000, 0.45f, 0.5f, 1), S(3000, 900, 0.3f, 0.4f, 1) };
 static const Synth::Step kLap[] = { S(784, 784, 0.35f, 0.08f, 2), S(988, 988, 0.35f, 0.08f, 2), S(1319, 1319, 0.4f, 0.22f, 2) };
 static const Synth::Step kFinish[] = {
@@ -28,21 +44,34 @@ void Synth::play(int sfx) {
 
 void Synth::start(int sfx) {
     const void* prog = nullptr; int n = 0; int slot = 0;
+    const void* prog2 = nullptr; int n2 = 0;                 // optional layered program (slot 2)
     switch (sfx) {
     case plat::SFX_BEEP_LOW:  prog = kBeepLow;  n = countOf(kBeepLow);  slot = 0; break;
     case plat::SFX_BEEP_HIGH: prog = kBeepHigh; n = countOf(kBeepHigh); slot = 0; break;
     case plat::SFX_MENU_MOVE: prog = kMove;     n = countOf(kMove);     slot = 0; break;
     case plat::SFX_MENU_OK:   prog = kOk;       n = countOf(kOk);       slot = 0; break;
     case plat::SFX_CRASH:     prog = kCrash;    n = countOf(kCrash);    slot = 1; break;
-    case plat::SFX_BUMP:      prog = kBump;     n = countOf(kBump);     slot = 1; break;
+    case plat::SFX_BUMP:      prog = kBump;     n = countOf(kBump);     slot = 1; prog2 = kBumpB;   n2 = countOf(kBumpB);   break;
     case plat::SFX_NITRO:     prog = kNitro;    n = countOf(kNitro);    slot = 2; break;
     case plat::SFX_LAP:       prog = kLap;      n = countOf(kLap);      slot = 0; break;
     case plat::SFX_FINISH:    prog = kFinish;   n = countOf(kFinish);   slot = 0; break;
+    case plat::SFX_HIT_SOFT:  prog = kSoftA;    n = countOf(kSoftA);    slot = 1; prog2 = kSoftB;   n2 = countOf(kSoftB);   break;
+    case plat::SFX_HIT_WOOD:  prog = kWoodA;    n = countOf(kWoodA);    slot = 1; prog2 = kWoodB;   n2 = countOf(kWoodB);   break;
+    case plat::SFX_HIT_ROCK:  prog = kRockA;    n = countOf(kRockA);    slot = 1; prog2 = kRockB;   n2 = countOf(kRockB);   break;
+    case plat::SFX_HIT_METAL: prog = kMetalA;   n = countOf(kMetalA);   slot = 1; prog2 = kMetalB;  n2 = countOf(kMetalB);  break;
+    case plat::SFX_HIT_ICE:   prog = kIceA;     n = countOf(kIceA);     slot = 1; prog2 = kIceB;    n2 = countOf(kIceB);    break;
+    case plat::SFX_HIT_HEAVY: prog = kHeavyA;   n = countOf(kHeavyA);   slot = 1; prog2 = kHeavyB;  n2 = countOf(kHeavyB);  break;
+    case plat::SFX_SCRAPE:    prog = kScrapeA;  n = countOf(kScrapeA);  slot = 1; prog2 = kScrapeB; n2 = countOf(kScrapeB); break;
     default: return;
     }
     Voice& v = m_voice[slot];
     v.steps = static_cast<const Step*>(prog);
     v.count = n; v.cur = 0; v.t = 0; v.phase = 0;
+    if (prog2) {
+        Voice& w = m_voice[2];
+        w.steps = static_cast<const Step*>(prog2);
+        w.count = n2; w.cur = 0; w.t = 0; w.phase = 0;
+    }
 }
 
 // ------------------------------------------------------------------ music

@@ -214,6 +214,8 @@ static void draw_car_base(Canvas& c) {
     }
 }
 
+static void make_car_3q(SpriteId id, int dir);
+
 static void make_cars() {
     // straight
     {
@@ -248,6 +250,119 @@ static void make_cars() {
         g_sprites[i].hitW = 0.95f;
         g_sprites[i].emissive = (1 << C_TAIL) | (1 << C_TAILB);
     }
+    make_car_3q(SPR_CAR_LEFT3Q, -1);
+    make_car_3q(SPR_CAR_RIGHT3Q, +1);
+}
+
+
+// ---- three-quarter rear views ------------------------------------------------------
+// The flank of a car turning towards `dir` (-1 left, +1 right) appears on that side. Geometry is
+// authored for a left turn (lit flank) and mirrored for a right turn (flank in the shade).
+static void make_car_3q(SpriteId id, int dir) {
+    Sprite& s = g_sprites[id];
+    const int CW = 148, FL = 38, REARW = 104;
+    Canvas c(s, CW, CAR_H);
+    Sprite tmpS; Canvas src(tmpS, CAR_W, CAR_H);
+    draw_car_base(src);
+    const bool left = dir < 0;
+    const float NX = (float)FL;                          // rear corner of the flank (left-turn geometry)
+    auto X = [&](float x) { return left ? x : (float)(CW - 1) - x; };
+    // point on the flank: u = 0 at the tail .. 1 at the nose, h = height above the ground at the tail's scale
+    auto sc = [](float u) { return 1.0f - 0.30f * u; };
+    auto P = [&](float u, float h, float inset = 0.0f, float recess = 0.0f) {
+        float uu = u + recess;
+        struct Pt { float x, y; } r;
+        r.x = X(NX + inset - uu * 40.0f);
+        r.y = 51.5f - uu * 7.0f - h * sc(uu);
+        return r;
+    };
+    auto poly = [&](const float* v, int n, uint8_t col) { c.poly(v, n, col); };
+    const uint8_t cSpec = C_SPEC, cBL = C_BL, cBM = C_BM, cBD = C_BD;
+    const uint8_t lit = left ? cBL : cBM, mid = left ? cBM : cBD, dark = cBD;
+
+    c.ellipse(left ? 84 : 64, 54, 68, 4.5f, SHADOW);
+    // ---- body flank: shoulder line from tail deck down to the nose, sill underneath
+    static const float us[] = { 0.0f, 0.12f, 0.3f, 0.5f, 0.68f, 0.85f, 1.0f };
+    static const float hs[] = { 25.0f, 25.0f, 24.5f, 23.5f, 21.0f, 17.5f, 14.0f };   // shoulder
+    float body[28]; int bn = 0;
+    for (int k = 0; k < 7; ++k) { auto q = P(us[k], hs[k]); body[bn++] = q.x; body[bn++] = q.y; }
+    for (int k = 6; k >= 0; --k) { auto q = P(us[k], 3.0f); body[bn++] = q.x; body[bn++] = q.y; }
+    poly(body, 14, C_BM);
+    // paint: lit shoulder, mid flank, dark sill; dithered between
+    for (int y = 20; y < 54; ++y)
+        for (int x = 0; x < CW; ++x) {
+            if (c.get(x, y) != C_BM) continue;
+            int fx = left ? x : CW - 1 - x;
+            float u = (NX - fx) / 40.0f; if (u < 0) u = 0;
+            float top = P(u, 25.0f - 11.0f * u * u).y, bot = P(u, 3.0f).y;   // shoulder and sill at this u
+            float t = (y - top) / (bot - top + 0.01f);
+            uint8_t col = t < 0.10f ? (left ? cSpec : cBL) : t < 0.42f ? lit : t < 0.78f ? mid : dark;
+            if (t > 0.30f && t < 0.50f && ((fx + y) & 1) == 0) col = mid;
+            if (t > 0.70f && t < 0.86f && ((fx + y) & 1) == 0) col = dark;
+            c.set(x, y, col);
+        }
+    // character line along the flank, door cut, rear-quarter air intakes
+    for (int k = 0; k <= 20; ++k) { float u = k / 20.0f; auto q = P(u, 15.0f - 3.0f * u * u); c.set((int)q.x, (int)q.y, left ? cSpec : cBL); }
+    { auto a1 = P(0.40f, 22.0f), a2 = P(0.40f, 5.0f); c.thick(a1.x, a1.y, a2.x, a2.y, 0.5f, C_OUT); }
+    for (int k = 0; k < 4; ++k) {
+        auto a1 = P(0.04f + k * 0.035f, 22.0f), a2 = P(0.10f + k * 0.035f, 11.0f);
+        c.thick(a1.x, a1.y, a2.x, a2.y, 0.6f, C_OUT);
+    }
+    // ---- cabin: narrower than the body, so inset towards the rear face
+    static const float cu[] = { 0.0f, 0.18f, 0.40f, 0.52f, 0.62f };
+    static const float ch[] = { 50.0f, 50.0f, 47.0f, 40.0f, 23.0f };      // roof line down the windscreen
+    float cab[24]; int cn = 0;
+    for (int k = 0; k < 5; ++k) { auto q = P(cu[k], ch[k], 29.0f, 0.04f); cab[cn++] = q.x; cab[cn++] = q.y; }
+    for (int k = 4; k >= 0; --k) { auto q = P(cu[k], 24.5f, 29.0f, 0.04f); cab[cn++] = q.x; cab[cn++] = q.y; }
+    poly(cab, 10, C_BM);
+    for (int y = 0; y < 30; ++y)
+        for (int x = 0; x < CW; ++x)
+            if (c.get(x, y) == C_BM) c.set(x, y, y < 8 ? (left ? cSpec : cBL) : lit);
+    // side glass
+    float gl[24]; int gn = 0;
+    for (int k = 0; k < 5; ++k) { auto q = P(cu[k] + 0.02f, ch[k] - 3.5f - (k == 4 ? 3.0f : 0.0f), 29.0f, 0.04f); gl[gn++] = q.x; gl[gn++] = q.y; }
+    for (int k = 4; k >= 0; --k) { auto q = P(cu[k] + 0.02f, 27.5f, 29.0f, 0.04f); gl[gn++] = q.x; gl[gn++] = q.y; }
+    poly(gl, 10, C_GD);
+    for (int y = 0; y < 30; ++y)
+        for (int x = 0; x < CW; ++x)
+            if (c.get(x, y) == C_GD && y < 12 && ((x + y) & 1) == 0) c.set(x, y, C_GL);
+    { auto q1 = P(0.28f, 45.0f, 29.0f, 0.04f), q2 = P(0.22f, 29.0f, 29.0f, 0.04f); c.thick(q1.x, q1.y, q2.x, q2.y, 0.8f, C_GL); }
+    // ---- wheels (the rear tyre's tread is part of the rear face drawn on top)
+    {
+        auto w1 = P(0.17f, 9.5f);  float s1 = sc(0.17f);
+        c.ellipse(w1.x, w1.y, 5.0f * s1 + 1.0f, 9.5f * s1, C_TY);
+        c.ellipse(w1.x, w1.y, 3.0f * s1 + 0.6f, 6.2f * s1, C_EXH);
+        c.ellipse(w1.x, w1.y, 1.2f * s1, 2.2f * s1, C_OUT);
+        auto w2 = P(0.84f, 8.0f);  float s2 = sc(0.84f);
+        c.ellipse(w2.x, w2.y, 4.2f * s2 + 0.6f, 8.0f * s2, C_TY);
+        c.ellipse(w2.x, w2.y, 2.4f * s2 + 0.4f, 5.2f * s2, C_EXH);
+        c.ellipse(w2.x, w2.y, 1.0f * s2, 1.8f * s2, C_OUT);
+        // arches shadow above the wheels
+        c.thick(w1.x - 4, w1.y - 10 * s1, w1.x + 4, w1.y - 10 * s1, 0.5f, C_OUT);
+        c.thick(w2.x - 3, w2.y - 8.5f * s2, w2.x + 3, w2.y - 8.5f * s2, 0.5f, C_OUT);
+    }
+    // nose: pop-up headlamp and bumper corner
+    { auto q = P(0.98f, 15.0f); c.rect((int)(left ? q.x : q.x - 3), (int)q.y, 3, 3, C_PLATE); }
+
+    // ---- rear face: resampled, with the upper body leaning towards the nose
+    const int rx0 = left ? FL : CW - FL - REARW;
+    for (int y = 0; y < CAR_H; ++y) {
+        int off = y < 34 ? (int)lroundf(dir * 4.0f * (34 - y) / 34.0f) : 0;
+        for (int x = rx0 - 6; x < rx0 + REARW + 6; ++x) {
+            int sxp = (x - off - rx0) * CAR_W / REARW;
+            if (sxp < 0 || sxp >= CAR_W) continue;
+            uint8_t v = src.get(sxp, y);
+            if (v && v != SHADOW) c.set(x, y, v);
+        }
+    }
+    c.outline(C_OUT);
+    plat::freeLarge(tmpS.px);
+    s.worldW = 700.0f * CW / CAR_W;
+    s.hitW = 0.95f;
+    s.emissive = (1 << C_TAIL) | (1 << C_TAILB);
+    s.anchorX = (int16_t)(rx0 + REARW / 2);
+    s.lightL = (int16_t)(rx0 + 20 * REARW / CAR_W);
+    s.lightR = (int16_t)(rx0 + 92 * REARW / CAR_W);
 }
 
 void car_palette(uint16_t out[16], const Livery& l, bool braking) {

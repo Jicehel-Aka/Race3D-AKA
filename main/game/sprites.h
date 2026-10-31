@@ -16,6 +16,7 @@ enum SpriteId : uint8_t {
     SPR_BOARD_D, SPR_BOARD_E, SPR_BOARD_F,
     // roadside dressing
     SPR_CRATES, SPR_BARRIER, SPR_DUNEGRASS, SPR_FENCE, SPR_HAYBALE, SPR_FLOWERS, SPR_POLE,
+    SPR_CAR_LEFT3Q, SPR_CAR_RIGHT3Q,   // three-quarter rear views (strong turns, spin-outs)
     SPR_COUNT
 };
 
@@ -25,6 +26,8 @@ struct Sprite {
     float worldW = 1000;     // width in world units (road half width = 2000)
     float hitW = 0.5f;       // fraction of worldW that is solid
     uint16_t emissive = 0;   // bitmask of palette indices that ignore ambient light
+    int16_t anchorX = 0;     // cars: x of the rear-face centre inside the sprite (0 = centred)
+    int16_t lightL = 0, lightR = 0;   // cars: x of the tail lights (0 = default 20 / 92)
 };
 
 extern Sprite g_sprites[SPR_COUNT];

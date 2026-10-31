@@ -543,9 +543,15 @@ void draw_prop(const Race& r, const PSeg& ps, const Prop& pr) {
 void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int clip, int fog, bool isPlayerView) {
     const Theme& th = g_themes[r.track.theme];
     int id = SPR_CAR;
-    if (c.steerVis < -0.3f) id = SPR_CAR_LEFT;
-    else if (c.steerVis > 0.3f) id = SPR_CAR_RIGHT;
+    float sv = c.steerVis;
+    if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) id = r.spinDir < 0 ? SPR_CAR_LEFT3Q : SPR_CAR_RIGHT3Q;   // yawed by an impact
+    else if (sv < -0.9f) id = SPR_CAR_LEFT3Q;
+    else if (sv < -0.3f) id = SPR_CAR_LEFT;
+    else if (sv > 0.9f) id = SPR_CAR_RIGHT3Q;
+    else if (sv > 0.3f) id = SPR_CAR_RIGHT;
     const Sprite& sp = g_sprites[id];
+    const float sc = dw / 112.0f;                         // screen pixels per sprite pixel
+    if (sp.anchorX) { x += (int)((56 - sp.anchorX) * sc); dw = (int)(sp.w * sc + 0.5f); }   // wider three-quarter sprites
     uint16_t base[16];
     car_palette(base, c.livery, c.braking);
     int amb = th.ambient < 256 ? th.ambient + 40 : 256;
@@ -555,9 +561,9 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
         uint16_t gc = c.braking ? rgb(140, 20, 20) : rgb(70, 10, 10);
         int ly = y + 31 * dh / 58;
         if (ly < clip) {
-            int rad = dw / (isPlayerView ? 8 : 7) + 1;
-            glowCircle(x + 20 * dw / 112, ly, rad, scale(gc, 256 - fog));
-            glowCircle(x + 92 * dw / 112, ly, rad, scale(gc, 256 - fog));
+            int rad = (int)(112 * sc / (isPlayerView ? 8 : 7)) + 1;
+            glowCircle(x + (int)((sp.lightL ? sp.lightL : 20) * sc), ly, rad, scale(gc, 256 - fog));
+            glowCircle(x + (int)((sp.lightR ? sp.lightR : 92) * sc), ly, rad, scale(gc, 256 - fog));
         }
     }
 }
@@ -669,6 +675,7 @@ void render_world(const Race& r, float time) {
                     }
                 }
             }
+            if (r.spinT > 0) { px += (int)(sinf(time * 70) * 3.0f * r.spinT / 0.55f); py -= (int)(r.spinT > 0.4f ? 2 : 0); }
             draw_car(r, pl, px, py, 112, 58, H, 0, true);
             if (r.nitroOn) {
                 for (int e = 0; e < 2; ++e) {
@@ -698,26 +705,139 @@ void render_world(const Race& r, float time) {
 
 // =================================================================== particles
 namespace {
-struct Particle { float x, y, vx, vy, life, max; uint16_t c; uint8_t size; };
-constexpr int MAXP = 120;
+// kind: 0 fading square, 1 spark streak, 2 solid chip, 3 growing soft puff
+struct Particle { float x, y, vx, vy, life, max; uint16_t c; uint8_t size, kind; float g, grow; };
+constexpr int MAXP = 260;
 Particle s_p[MAXP];
 int s_pn = 0;
 uint32_t s_seed = 99;
+float s_flash = 0; uint16_t s_flashCol = 0;
 float prand() { s_seed ^= s_seed << 13; s_seed ^= s_seed >> 17; s_seed ^= s_seed << 5; return (s_seed & 0xFFFF) / 65536.0f; }
 
-void spawn(float x, float y, float vx, float vy, float life, uint16_t c, int size) {
+void spawn(float x, float y, float vx, float vy, float life, uint16_t c, int size, int kind = 0, float g = 40.0f, float grow = 3.0f) {
     if (s_pn >= MAXP) return;
-    s_p[s_pn++] = { x, y, vx, vy, life, life, c, (uint8_t)size };
+    s_p[s_pn++] = { x, y, vx, vy, life, life, c, (uint8_t)size, (uint8_t)kind, g, grow };
 }
 } // namespace
 
-void fx_clear() { s_pn = 0; }
+void fx_clear() { s_pn = 0; s_flash = 0; }
 
 void fx_burst(int x, int y, int n, uint16_t c, float speed, float life) {
     for (int i = 0; i < n; ++i) {
         float a = prand() * 6.2831f, v = speed * (0.3f + prand());
         spawn((float)x, (float)y, cosf(a) * v, sinf(a) * v - speed * 0.5f, life * (0.5f + prand()), c, 1 + (int)(prand() * 2));
     }
+}
+
+namespace {
+void sparks(int x, int y, int n, float v, int dirX) {
+    for (int i = 0; i < n * 3 / 2; ++i) {
+        float a = prand() * 6.2831f, sp = v * (0.35f + prand());
+        float vx = cosf(a) * sp + dirX * v * 0.5f, vy = sinf(a) * sp - v * 0.55f;
+        spawn((float)x, (float)y, vx, vy, 0.25f + prand() * 0.35f, prand() < 0.4f ? rgb(255, 255, 220) : rgb(255, 190 + (int)(prand() * 40), 60), 1, 1, 260.0f);
+    }
+}
+void chips(int x, int y, int n, float v, uint16_t c1, uint16_t c2, int dirX, int sizeMax = 3) {
+    for (int i = 0; i < n; ++i) {
+        float a = prand() * 6.2831f, sp = v * (0.3f + prand());
+        spawn((float)x, (float)y, cosf(a) * sp + dirX * v * 0.4f, sinf(a) * sp - v * 0.6f, 0.5f + prand() * 0.5f, prand() < 0.5f ? c1 : c2, 3 + (int)(prand() * (sizeMax - 1)), 2, 280.0f);
+    }
+}
+void puff(int x, int y, int n, uint16_t c, int size, float spread, float rise, float life = 0.9f, float grow = 5.0f) {
+    for (int i = 0; i < n; ++i)
+        spawn(x + (prand() - 0.5f) * spread, y + (prand() - 0.5f) * spread * 0.5f, (prand() - 0.5f) * 40, -rise * (0.4f + prand()), life * (0.6f + prand() * 0.6f), c, size + 2, 3, -8.0f, grow);
+}
+void leaves(int x, int y, int n, uint16_t c1, uint16_t c2, float v) {
+    for (int i = 0; i < n; ++i) {
+        float a = prand() * 6.2831f, sp = v * (0.3f + prand());
+        spawn((float)x, (float)y, cosf(a) * sp, sinf(a) * sp - v * 0.8f, 0.9f + prand() * 0.7f, prand() < 0.5f ? c1 : c2, 3, 2, 45.0f);
+    }
+}
+} // namespace
+
+void fx_flash(uint16_t c, float strength) { s_flash = strength; s_flashCol = c; }
+
+// impact effects, chosen by what was hit
+void fx_emit(const Race& r) {
+    const RaceEvents& e = r.ev;
+    if (!e.hit) return;
+    const bool cold = r.track.theme == THEME_ALPINE || r.track.theme == THEME_GLACIER;
+    const int side = e.hitSide ? e.hitSide : 1;
+    const float pw = e.hitPower;
+    const int ix = W / 2 + side * 52, iy = H - 34;
+    const int nS = 4 + (int)(pw * 10);
+    switch (e.hit) {
+    case HIT_CAR_REAR:
+        sparks(W / 2, H - 52, nS, 120, 0);
+        chips(W / 2 + side * 20, H - 40, 5, 90, rgb(220, 30, 30), e.hitColor, side, 2);
+        puff(W / 2, H - 62, 3, rgb(150, 150, 156), 4, 30, 25, 0.8f);
+        break;
+    case HIT_CAR_SIDE:
+        for (int k = 0; k < 6 + (int)(pw * 8); ++k)     // sparks sliding along the contact line
+            spawn((float)ix, H - 56.0f + prand() * 30, side * (30 + prand() * 80), -30 - prand() * 50, 0.2f + prand() * 0.3f,
+                  prand() < 0.5f ? rgb(255, 255, 210) : rgb(255, 180, 50), 1, 1, 240.0f);
+        chips(ix, H - 44, 4, 70, e.hitColor, rgb(230, 230, 236), side, 2);
+        break;
+    default: switch (e.hitSpr) {
+        case SPR_PALM: case SPR_TREE: case SPR_PINE:
+            chips(ix, iy, 6 + (int)(pw * 6), 130, rgb(120, 80, 46), rgb(170, 120, 70), -side);
+            leaves(ix, iy - 10, 8 + (int)(pw * 8), rgb(40, 130, 60), rgb(90, 180, 80), 90);
+            if (cold || e.hitSpr == SPR_PINE) puff(ix, iy - 20, 5, rgb(240, 246, 255), 5, 30, 20, 1.0f, 6.0f);   // snow shaken off the branches
+            puff(ix, iy, 3, rgb(150, 120, 80), 4, 18, 18);
+            break;
+        case SPR_BUSH: case SPR_FLOWERS: case SPR_DUNEGRASS:
+            leaves(ix, iy - 6, 10, rgb(50, 140, 60), rgb(110, 190, 80), 80);
+            if (e.hitSpr == SPR_FLOWERS) leaves(ix, iy - 8, 8, rgb(240, 60, 80), rgb(255, 220, 60), 70);
+            if (e.hitSpr == SPR_DUNEGRASS) puff(ix, iy, 4, rgb(236, 214, 160), 4, 26, 16);
+            break;
+        case SPR_HAYBALE:
+            leaves(ix, iy - 6, 18, rgb(236, 196, 80), rgb(250, 226, 130), 100);
+            puff(ix, iy - 4, 4, rgb(226, 190, 100), 5, 30, 20);
+            break;
+        case SPR_SNOWMAN:
+            puff(ix, iy - 10, 8, rgb(250, 252, 255), 6, 36, 25, 1.0f, 6.0f);
+            chips(ix, iy - 14, 3, 80, rgb(255, 130, 30), rgb(30, 30, 40), side, 2);
+            break;
+        case SPR_PARASOL:
+            leaves(ix, iy - 14, 10, rgb(238, 60, 60), rgb(252, 252, 252), 90);
+            break;
+        case SPR_ROCK:
+            chips(ix, iy, 10 + (int)(pw * 6), 150, rgb(120, 116, 128), rgb(176, 172, 184), -side, 4);
+            sparks(ix, iy - 4, 6, 110, -side);
+            puff(ix, iy, 5, rgb(176, 160, 130), 5, 26, 22, 1.0f, 6.0f);
+            break;
+        case SPR_ICE:
+            chips(ix, iy - 6, 12 + (int)(pw * 6), 140, rgb(200, 236, 252), rgb(120, 180, 232), -side, 3);
+            for (int k = 0; k < 6; ++k) spawn(ix + (prand() - 0.5f) * 30, iy - 10 - prand() * 20, 0, -10, 0.5f, rgb(255, 255, 255), 1, 0, 0);
+            puff(ix, iy - 4, 5, rgb(236, 246, 255), 5, 28, 20, 0.9f, 5.0f);
+            break;
+        case SPR_FENCE: case SPR_CRATES: case SPR_HUT:
+            chips(ix, iy - 4, 10 + (int)(pw * 6), 150, rgb(100, 68, 40), rgb(176, 130, 80), -side, 4);
+            puff(ix, iy, 4, rgb(190, 160, 120), 4, 24, 18);
+            break;
+        case SPR_BOARD_A: case SPR_BOARD_B: case SPR_BOARD_C: case SPR_BOARD_D: case SPR_BOARD_E: case SPR_BOARD_F:
+            sparks(ix, iy - 4, nS + 4, 140, -side);
+            chips(ix, iy - 10, 8, 120, rgb(250, 250, 250), rgb(210, 60, 60), -side, 3);
+            break;
+        case SPR_BUILDING_A: case SPR_BUILDING_B: case SPR_BUILDING_C: case SPR_WAREHOUSE: case SPR_CRANE:
+        case SPR_LIGHTHOUSE: case SPR_GANTRY:
+            chips(ix, iy - 4, 12 + (int)(pw * 8), 160, rgb(110, 114, 126), rgb(170, 174, 184), -side, 4);
+            sparks(ix, iy - 8, 10, 150, -side);
+            puff(ix, iy - 4, 8, rgb(150, 150, 160), 7, 40, 24, 1.1f, 7.0f);
+            break;
+        case SPR_CONTAINER: case SPR_CONTAINER2:
+            chips(ix, iy - 4, 10 + (int)(pw * 6), 150, rgb(196, 56, 46), rgb(46, 100, 174), -side, 4);
+            sparks(ix, iy - 8, 10, 150, -side);
+            puff(ix, iy - 4, 6, rgb(150, 150, 160), 6, 36, 22, 1.0f, 6.0f);
+            break;
+        default:        // posts, lamps, barriers, chevrons
+            sparks(ix, iy - 6, nS + 6, 150, -side);
+            chips(ix, iy - 8, 6, 110, rgb(222, 40, 44), rgb(246, 246, 248), -side, 3);
+            break;
+        }
+    }
+    if (e.hit == HIT_HEAVY || e.hit == HIT_ROCK) fx_flash(rgb(255, 250, 235), 0.28f + 0.3f * pw);
+    else if (e.hit == HIT_METAL || e.hit == HIT_WOOD || e.hit == HIT_ICE) fx_flash(rgb(255, 255, 255), 0.10f + 0.12f * pw);
 }
 
 void fx_update(const Race& r, float dt) {
@@ -737,12 +857,18 @@ void fx_update(const Race& r, float dt) {
     if (r.nitroOn) {
         for (int e = 0; e < 2; ++e) spawn(W / 2 + (e ? 20 : -20), (float)py + 54, (prand() - 0.5f) * 20, 40 + prand() * 40, 0.2f, rgb(255, 190, 80), 1);
     }
+    if (r.smokeT > 0 && prand() < 0.5f) {       // smoke from the damaged car
+        float k = r.smokeT > 1.0f ? 1.0f : r.smokeT;
+        spawn(W / 2 + (prand() - 0.5f) * 40, (float)py + 22, (prand() - 0.5f) * 14, -30 - prand() * 20, 0.8f + 0.5f * k, lerp(rgb(60, 60, 66), rgb(170, 170, 176), (int)(prand() * 160)), 4, 3, -6.0f, 6.0f);
+    }
+    if (s_flash > 0) s_flash -= dt * 2.6f;
     for (int i = 0; i < s_pn;) {
         Particle& p = s_p[i];
         p.life -= dt;
         if (p.life <= 0) { s_p[i] = s_p[--s_pn]; continue; }
         p.x += p.vx * dt; p.y += p.vy * dt;
-        p.vy += 40 * dt;
+        p.vy += p.g * dt;
+        if (p.kind == 3) { p.vx *= 1.0f - 1.5f * dt; }
         ++i;
     }
 }
@@ -750,10 +876,30 @@ void fx_update(const Race& r, float dt) {
 void fx_draw() {
     for (int i = 0; i < s_pn; ++i) {
         const Particle& p = s_p[i];
-        int t = (int)(p.life / p.max * 256);
-        int s = p.size + (int)((1.0f - p.life / p.max) * 3);
-        blendRect((int)p.x - s / 2, (int)p.y - s / 2, s, s, p.c, t * 3 / 4);
+        float u = p.life / p.max;                    // 1 -> 0
+        int t = (int)(u * 256);
+        switch (p.kind) {
+        case 1: {                                    // spark streak
+            int x1 = (int)p.x, y1 = (int)p.y;
+            int x0 = (int)(p.x - p.vx * 0.055f), y0 = (int)(p.y - p.vy * 0.055f);
+            line(x0, y0, x1, y1, t > 120 ? p.c : lerp(p.c, rgb(160, 40, 10), 200 - t));
+            break; }
+        case 2: {                                    // solid chip, fades only at the end
+            int s2 = p.size;
+            uint16_t c = u < 0.25f ? lerp(p.c, rgb(0, 0, 0), 60) : p.c;
+            if (u > 0.12f) fillRect((int)p.x - s2 / 2, (int)p.y - s2 / 2, s2, s2, c);
+            break; }
+        case 3: {                                    // soft puff growing and thinning
+            int s3 = p.size + (int)((1.0f - u) * p.grow * 3);
+            blendRect((int)p.x - s3 / 2, (int)p.y - s3 / 2, s3, s3, p.c, t * 5 / 6);
+            break; }
+        default: {
+            int s = p.size + (int)((1.0f - u) * 3);
+            blendRect((int)p.x - s / 2, (int)p.y - s / 2, s, s, p.c, t * 3 / 4);
+        }
+        }
     }
+    if (s_flash > 0.01f) blendRect(0, 0, W, H, s_flashCol, (int)(s_flash * 256) > 160 ? 160 : (int)(s_flash * 256));
 }
 
 // =================================================================== HUD

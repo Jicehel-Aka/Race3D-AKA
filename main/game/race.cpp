@@ -110,6 +110,8 @@ void Race::update(float dt, const plat::Input& in) {
     ev = RaceEvents();
     if (started) raceTime += dt;
     if (shake > 0) shake -= dt;
+    if (spinT > 0) spinT -= dt;
+    if (smokeT > 0) smokeT -= dt;
 
     Car& p = player();
     float oldDist = p.dist;
@@ -281,11 +283,24 @@ void Race::updateAI(Car& c, float dt) {
     c.dist += c.speed * dt;
 }
 
+static HitKind hit_kind(int spr) {
+    switch (spr) {
+    case SPR_BUSH: case SPR_FLOWERS: case SPR_DUNEGRASS: case SPR_HAYBALE: case SPR_SNOWMAN: case SPR_PARASOL: return HIT_SOFT;
+    case SPR_PALM: case SPR_PINE: case SPR_TREE: case SPR_FENCE: case SPR_CRATES: case SPR_HUT: return HIT_WOOD;
+    case SPR_ROCK: return HIT_ROCK;
+    case SPR_ICE: return HIT_ICE;
+    case SPR_BUILDING_A: case SPR_BUILDING_B: case SPR_BUILDING_C: case SPR_WAREHOUSE: case SPR_CONTAINER: case SPR_CONTAINER2:
+    case SPR_CRANE: case SPR_LIGHTHOUSE: case SPR_GANTRY: return HIT_HEAVY;
+    default: return HIT_METAL;      // posts, lamps, boards, chevrons, barriers
+    }
+}
+
 void Race::collisions(float dt) {
     (void)dt;
     Car& p = player();
-    static float crashCooldown = 0;
+    static float crashCooldown = 0, sideCooldown = 0;
     if (crashCooldown > 0) crashCooldown -= dt;
+    if (sideCooldown > 0) sideCooldown -= dt;
 
     // roadside objects
     if (fabsf(p.x) > 1.0f && !autopilot) {
@@ -300,13 +315,32 @@ void Race::collisions(float dt) {
                 float w = sp.worldW / ROAD_W;
                 float centre = pr.offset + (pr.offset > 0 ? w / 2 : -w / 2);
                 if (overlap(p.x, CAR_NORM_W, centre, w * sp.hitW)) {
+                    HitKind kind = hit_kind(pr.spr);
+                    float cap = MAX_SPEED / 7.0f, push = 0.12f, shk = 0.5f, cool = 0.6f;
+                    switch (kind) {
+                    case HIT_SOFT:  cap = MAX_SPEED * 0.55f; push = 0.03f; shk = 0.18f; cool = 0.3f; break;
+                    case HIT_WOOD:  cap = MAX_SPEED / 7.0f;  push = 0.12f; shk = 0.5f;  break;
+                    case HIT_ROCK:  cap = MAX_SPEED / 8.5f;  push = 0.14f; shk = 0.75f; break;
+                    case HIT_METAL: cap = MAX_SPEED / 6.0f;  push = 0.10f; shk = 0.45f; break;
+                    case HIT_ICE:   cap = MAX_SPEED / 5.5f;  push = 0.17f; shk = 0.4f;  break;
+                    case HIT_HEAVY: cap = MAX_SPEED / 9.0f;  push = 0.16f; shk = 0.9f;  break;
+                    default: break;
+                    }
                     if (crashCooldown <= 0 && p.speed > MAX_SPEED * 0.12f) {
+                        float power = clampf(p.speed / MAX_SPEED, 0.0f, 1.0f);
                         ev.crash = true;
-                        crashCooldown = 0.6f;
-                        shake = 0.5f;
-                        p.speed = MAX_SPEED / 7.0f;
-                        p.x += (p.x > 0 ? -1.0f : 1.0f) * 0.12f;
-                    } else if (p.speed > MAX_SPEED / 7.0f) p.speed = MAX_SPEED / 7.0f;
+                        ev.hit = kind;
+                        ev.hitSide = pr.offset > 0 ? 1 : -1;
+                        ev.hitSpr = pr.spr;
+                        ev.hitPower = power;
+                        crashCooldown = cool;
+                        shake = shk * (0.55f + 0.45f * power);
+                        if (kind == HIT_SOFT) p.speed *= 0.72f; else p.speed = fminf(p.speed, cap);
+                        p.x += (p.x > 0 ? -1.0f : 1.0f) * push;
+                        spinT = kind == HIT_SOFT ? 0.0f : 0.55f;
+                        spinDir = p.x > 0 ? 1 : -1;     // the car yaws away from the obstacle
+                        if (kind == HIT_METAL || kind == HIT_ROCK || kind == HIT_HEAVY) smokeT = 0.8f + 1.6f * power;
+                    } else if (kind != HIT_SOFT && p.speed > cap) p.speed = cap;
                 }
             }
         }
@@ -325,15 +359,32 @@ void Race::collisions(float dt) {
             Car& front = dz > 0 ? b : a;
             Car& back = dz > 0 ? a : b;
             float gap = fabsf(dz);
+            float lat = fabsf(a.x - b.x) / CAR_NORM_W;        // 0 = dead centre behind, ~0.9 = fenders just touching
+            bool involvesPlayer = back.isPlayer || front.isPlayer;
+            const Car& other = (back.isPlayer ? front : back);
             if (back.speed > front.speed) {
                 float vb = back.speed;
                 back.speed = front.speed * 0.85f;
                 front.speed = fminf(front.speed + (vb - front.speed) * 0.3f, MAX_SPEED * 1.1f);
                 back.dist -= (SEG_LEN * 0.9f - gap);
-                if (back.isPlayer || front.isPlayer) {
-                    ev.bump = true;
-                    shake = fmaxf(shake, 0.25f);
+                if (involvesPlayer) {
+                    float power = clampf((vb - front.speed) / (MAX_SPEED * 0.35f), 0.2f, 1.0f);
+                    bool glancing = lat > 0.45f;
+                    ev.bump = !glancing;
+                    ev.hit = glancing ? HIT_CAR_SIDE : HIT_CAR_REAR;
+                    ev.hitSide = other.x >= player().x ? 1 : -1;
+                    ev.hitPower = power;
+                    ev.hitColor = other.livery.body;
+                    shake = fmaxf(shake, glancing ? 0.18f : 0.3f);
+                    if (!glancing) { spinT = 0.35f; spinDir = ev.hitSide > 0 ? -1 : 1; }
                 }
+            } else if (involvesPlayer && lat > 0.35f && gap < SEG_LEN * 0.55f && sideCooldown <= 0) {
+                // alongside: paint rubbing
+                ev.hit = HIT_CAR_SIDE;
+                ev.hitSide = other.x >= player().x ? 1 : -1;
+                ev.hitPower = 0.35f;
+                ev.hitColor = other.livery.body;
+                sideCooldown = 0.45f;
             }
             float push = (a.x < b.x ? -1.0f : 1.0f) * 0.035f;
             a.x += push; b.x -= push;
