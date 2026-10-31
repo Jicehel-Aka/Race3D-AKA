@@ -559,8 +559,7 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
     if (car_art_ready()) {
         // true colour pictures: rear view, or the three-quarter rear view in hard turns / after an impact (never deformed)
         // stage: 0 rear view, 1..CAR_ART_MID intermediate pictures, CAR_ART_MID+1 three-quarter view
-        // the current 3/4 pictures show the FRONT of the cars: disabled until rear three-quarter art is imported
-        constexpr bool kUseTq = false;
+        constexpr bool kUseTq = true;       // rear three-quarter pictures (set false to keep the rear view in turns)
         int stage = 0; bool flip = false;
         if (!kUseTq) {}
         else if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) { stage = CAR_ART_MID + 1; flip = r.spinDir > 0; }
