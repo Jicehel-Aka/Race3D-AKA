@@ -557,8 +557,11 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
     float sv = c.steerVis;
     int amb = th.ambient < 256 ? th.ambient + 40 : 256;
     if (car_art_ready()) {
-        // true colour rear view; no deformation in turns (a three-quarter picture set can be plugged in here later)
-        const int dir = 0; const float amp = 0;
+        // true colour pictures: rear view, or the three-quarter rear view in hard turns / after an impact (never deformed)
+        bool tq = false, flip = false;
+        if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) { tq = true; flip = r.spinDir > 0; }
+        else if (sv < -0.9f) tq = true;
+        else if (sv > 0.9f) { tq = true; flip = true; }
         int dhA = dw * CAR_ART_H / CAR_ART_W;
         int ya = y + dh * 52 / 58 - dhA;                     // wheels on the ground line of the old sprites
         // ground shadow
@@ -572,13 +575,13 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
                 for (int i = a0; i < a1; ++i) fb[j * W + i] = half(fb[j * W + i]);
             }
         }
-        blit_car(c.look, x, ya, dw, dhA, clip, dir, amp, amb, th.fog, fog);
-        if ((c.braking || th.ambient < 256) && dw > 8 && fog < 200) {
+        blit_car(c.look, tq, flip, x, ya, dw, dhA, clip, amb, th.fog, fog);
+        if (!tq && (c.braking || th.ambient < 256) && dw > 8 && fog < 200) {
             uint16_t gc = c.braking ? rgb(140, 20, 20) : rgb(70, 10, 10);
             int ly = ya + dhA * 58 / 100;
             if (ly < clip) {
                 int rad = (int)(dw / (isPlayerView ? 8 : 7)) + 1;
-                int shift = dir ? (int)(dir * amp * dw / 112.0f * 0.25f) : 0;
+                int shift = 0;
                 glowCircle(x + dw * 23 / 100 + shift, ly, rad, scale(gc, 256 - fog));
                 glowCircle(x + dw * 77 / 100 + shift, ly, rad, scale(gc, 256 - fog));
             }

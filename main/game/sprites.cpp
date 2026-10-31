@@ -1450,6 +1450,7 @@ void blit(const Sprite& s, const uint16_t* pal, int x, int y, int dw, int dh, in
 namespace {
 struct CarMip { const uint16_t* px; int w, h; };
 CarMip s_carMip[CAR_ART_COUNT][3];
+CarMip s_carMip3[CAR_ART_COUNT][3];
 bool s_carReady = false;
 
 uint16_t* build_mip(const uint16_t* src, int sw, int sh) {
@@ -1481,36 +1482,39 @@ void car_art_init() {
             if (!px) { s_carReady = false; return; }
             s_carMip[d][m] = { px, p.w / 2, p.h / 2 };
         }
+        s_carMip3[d][0] = { kCarArt3q[d], CAR_ART3Q_W, CAR_ART_H };
+        for (int m = 1; m < 3; ++m) {
+            const CarMip& p = s_carMip3[d][m - 1];
+            uint16_t* px = build_mip(p.px, p.w, p.h);
+            if (!px) { s_carReady = false; return; }
+            s_carMip3[d][m] = { px, p.w / 2, p.h / 2 };
+        }
     }
     s_carReady = true;
 }
 bool car_art_ready() { return s_carReady; }
 
-void blit_car(int driver, int x, int y, int dw, int dh, int clipY, int dir, float amp, int ambient, uint16_t fogc, int fog) {
+void blit_car(int driver, bool tq, bool flip, int x, int y, int dw, int dh, int clipY, int ambient, uint16_t fogc, int fog) {
     if (!s_carReady || dw <= 0 || dh <= 0) return;
-    const CarMip* mips = s_carMip[driver % CAR_ART_COUNT];
+    const CarMip* mips = (tq ? s_carMip3 : s_carMip)[driver % CAR_ART_COUNT];
+    if (tq) { int w3 = dw * CAR_ART3Q_W / CAR_ART_W; x -= (w3 - dw) / 2; dw = w3; }      // same pixel scale as the rear view, centred
     int m = 0;
     while (m < 2 && mips[m + 1].w >= dw) ++m;
     const CarMip& mp = mips[m];
     const int ymax = clipY < gfx::H ? clipY : gfx::H;
     int y0 = y < 0 ? 0 : y, y1 = y + dh > ymax ? ymax : y + dh;
-    if (y0 >= y1) return;
+    int x0 = x < 0 ? 0 : x, x1 = x + dw > gfx::W ? gfx::W : x + dw;
+    if (y0 >= y1 || x0 >= x1) return;
     const int stepX = (mp.w << 16) / dw, stepY = (mp.h << 16) / dh;
-    const float shearPx = dir * amp * dw / 112.0f;
     for (int j = y0; j < y1; ++j) {
-        float t = (float)(j - y) / dh;
-        float off = t < 0.8f ? shearPx * (0.8f - t) / 0.8f : -shearPx * 0.12f * (t - 0.8f) / 0.2f;
-        int ioff = (int)lroundf(off);
-        int xa = x + ioff, xb = x + ioff + dw;
-        int x0 = xa < 0 ? 0 : xa, x1 = xb > gfx::W ? gfx::W : xb;
-        if (x0 >= x1) continue;
         int syf = (j - y) * stepY + (stepY >> 1) - 0x8000;
         int ya = syf >> 16, fy = (syf >> 8) & 255;
         int yb = ya + 1; if (ya < 0) ya = 0; if (yb < 0) yb = 0; if (ya > mp.h - 1) ya = mp.h - 1; if (yb > mp.h - 1) yb = mp.h - 1;
         const uint16_t* ra = mp.px + ya * mp.w; const uint16_t* rb = mp.px + yb * mp.w;
         uint16_t* d = gfx::fb + j * gfx::W + x0;
         for (int i = x0; i < x1; ++i, ++d) {
-            int sxf = (i - xa) * stepX + (stepX >> 1) - 0x8000;
+            int sxf = (i - x) * stepX + (stepX >> 1) - 0x8000;
+            if (flip) sxf = (mp.w << 16) - 1 - sxf;
             int xl = sxf >> 16, fx = (sxf >> 8) & 255;
             int xr = xl + 1; if (xl < 0) xl = 0; if (xr < 0) xr = 0; if (xl > mp.w - 1) xl = mp.w - 1; if (xr > mp.w - 1) xr = mp.w - 1;
             uint16_t c00 = ra[xl], c10 = ra[xr], c01 = rb[xl], c11 = rb[xr];
@@ -1520,7 +1524,7 @@ void blit_car(int driver, int x, int y, int dw, int dh, int clipY, int dir, floa
             if (c10 != CAR_ART_KEY) { aw += w10; r += w10 * (c10 & 31); g += w10 * ((c10 >> 5) & 63); b += w10 * (c10 >> 11); }
             if (c01 != CAR_ART_KEY) { aw += w01; r += w01 * (c01 & 31); g += w01 * ((c01 >> 5) & 63); b += w01 * (c01 >> 11); }
             if (c11 != CAR_ART_KEY) { aw += w11; r += w11 * (c11 & 31); g += w11 * ((c11 >> 5) & 63); b += w11 * (c11 >> 11); }
-            if (aw < 32768) continue;                         // less than half covered
+            if (aw < 32768) continue;
             uint16_t c = (uint16_t)((r / aw) | ((g / aw) << 5) | ((b / aw) << 11));
             if (ambient < 256) c = gfx::scale(c, ambient);
             if (fog > 0) c = gfx::lerp(c, fogc, fog);
