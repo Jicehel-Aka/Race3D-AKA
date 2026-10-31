@@ -13,7 +13,7 @@ KEY = 0xF81F
 PICK = [(2, 0), (11, 0), (6, 0), (4, 0), (9, 0), (1, 0), (0, 0), (2, 150)]
 # three-quarter rear pictures (rows 4-5 of the sheet, indices 12..19), nose pointing left; mirrored for the other side
 # (picture, hue shift) ; 'white' desaturates the blue paint
-PICK3 = [(13, 0), (16, 0), (14, 0), (18, 0), (17, 'white'), (17, 65), (19, -25), (12, 0)]
+PICK3 = [(13, 0), (16, 0), (14, 0), (18, 0), (17, 'white'), (17, 65), (16, (-22, 20, 70)), (13, 150)]   # (19) carries the sheet's watermark, (12) has a broken outline
 
 def cars(path):
     im = Image.open(path).convert('RGB'); a = np.array(im).astype(int)
@@ -36,7 +36,9 @@ def picture(im, sl, m, shift=0, W=W):
     crop = im.crop((sl[1].start, sl[0].start, sl[1].stop, sl[0].stop))
     if shift:                                       # recolour the saturated (painted) parts only
         hsv = np.array(crop.convert('HSV')).astype(int)
-        sel = (hsv[..., 1] > 90) & (hsv[..., 0] > 120) & (hsv[..., 0] < 205)     # blue paint only (keeps lamps and glass)
+        lo, hi = 120, 205                                                       # blue paint only (keeps lamps and glass)
+        if isinstance(shift, tuple): shift, lo, hi = shift
+        sel = (hsv[..., 1] > 90) & (hsv[..., 0] > lo) & (hsv[..., 0] < hi)
         if shift == 'white':
             hsv[..., 1][sel] = 25
             hsv[..., 2][sel] = np.minimum(255, hsv[..., 2][sel] * 1.2 + 25)

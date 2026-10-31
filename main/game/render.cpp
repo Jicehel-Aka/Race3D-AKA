@@ -563,27 +563,40 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
         else if (sv < -0.9f) tq = true;
         else if (sv > 0.9f) { tq = true; flip = true; }
         int dhA = dw * CAR_ART_H / CAR_ART_W;
-        int ya = y + dh * 52 / 58 - dhA;                     // wheels on the ground line of the old sprites
-        // ground shadow
+        // the tyres touch the ground line of the old sprites (the picture has a diffuser below the tyres)
+        int ya = y + dh * 52 / 58 - dhA * (tq ? 97 : 93) / 100;
+        int pw = tq ? dw * CAR_ART3Q_W / CAR_ART_W : dw, px0 = tq ? x - (pw - dw) / 2 : x;
+        // ground shadow: darkest right under the tyres
         {
-            int cx = x + dw / 2, cy = y + dh * 53 / 58, rx = dw * 47 / 100, ry = dh * 4 / 58 + 1;
+            int gy = ya + dhA * (tq ? 97 : 93) / 100;
+            int cx = px0 + pw / 2, ry = dhA * 9 / 100 + 1, rx = pw * 46 / 100, cy = gy - ry / 2;
             for (int j = cy - ry; j <= cy + ry; ++j) {
                 if (j < 0 || j >= clip || j >= H) continue;
                 float u = (float)(j - cy) / ry;
                 int half_ = (int)(rx * sqrtf(fmaxf(0.0f, 1.0f - u * u)));
                 int a0 = cx - half_ < 0 ? 0 : cx - half_, a1 = cx + half_ > W ? W : cx + half_;
-                for (int i = a0; i < a1; ++i) fb[j * W + i] = half(fb[j * W + i]);
+                for (int i = a0; i < a1; ++i) fb[j * W + i] = scale(fb[j * W + i], 110);
             }
         }
         blit_car(c.look, tq, flip, x, ya, dw, dhA, clip, amb, th.fog, fog);
-        if (!tq && (c.braking || th.ambient < 256) && dw > 8 && fog < 200) {
-            uint16_t gc = c.braking ? rgb(140, 20, 20) : rgb(70, 10, 10);
-            int ly = ya + dhA * 58 / 100;
-            if (ly < clip) {
-                int rad = (int)(dw / (isPlayerView ? 8 : 7)) + 1;
-                int shift = 0;
-                glowCircle(x + dw * 23 / 100 + shift, ly, rad, scale(gc, 256 - fog));
-                glowCircle(x + dw * 77 / 100 + shift, ly, rad, scale(gc, 256 - fog));
+        // lamps: lit when braking (strong) or at night (dim), on the lamp boxes of the picture
+        if ((c.braking || th.ambient < 256) && dw > 8 && fog < 200) {
+            const int picW = tq ? CAR_ART3Q_W : CAR_ART_W;
+            const uint8_t* lb = tq ? kLamp3q[c.look % CAR_ART_COUNT] : kLampRear;
+            uint16_t col = c.braking ? rgb(255, 36, 24) : rgb(150, 14, 14);
+            int alpha = c.braking ? 190 : 110;
+            for (int k = 0; k < 2; ++k) {
+                int bx0 = lb[k * 4], by0 = lb[k * 4 + 1], bx1 = lb[k * 4 + 2], by1 = lb[k * 4 + 3];
+                if (flip) { int t0 = picW - bx1, t1 = picW - bx0; bx0 = t0; bx1 = t1; }
+                int sx0 = px0 + bx0 * pw / picW, sx1 = px0 + bx1 * pw / picW;
+                int sy0 = ya + by0 * dhA / CAR_ART_H, sy1 = ya + by1 * dhA / CAR_ART_H;
+                if (sy1 > clip) sy1 = clip;
+                if (sx1 <= sx0) sx1 = sx0 + 1;
+                if (sy1 <= sy0) continue;
+                blendRect(sx0, sy0, sx1 - sx0, sy1 - sy0, scale(col, 256 - fog), alpha);
+                int rad = (sx1 - sx0) * 7 / 10 + 1;
+                int gy = (sy0 + sy1) / 2;
+                if (gy < clip) glowCircle((sx0 + sx1) / 2, gy, rad, scale(c.braking ? rgb(140, 20, 20) : rgb(70, 10, 10), 256 - fog));
             }
         }
         return;
