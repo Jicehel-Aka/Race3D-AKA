@@ -256,113 +256,295 @@ static void make_cars() {
 
 
 // ---- three-quarter rear views ------------------------------------------------------
-// The flank of a car turning towards `dir` (-1 left, +1 right) appears on that side. Geometry is
-// authored for a left turn (lit flank) and mirrored for a right turn (flank in the shade).
+// A small software renderer: the car is modelled in 3D (lofted body, cabin, wing, wheels, decals),
+// turned by `yaw`, projected with a little perspective and rasterised into the palette-indexed sprite
+// with a z-buffer, dithered shading and dark panel outlines. dir < 0: nose to the left (left turn).
+namespace {
+struct V3 { float x, y, z; };
+enum { MT_BODY = 0, MT_GLASS, MT_TYRE, MT_FLAT };
+enum { PT_NONE = 0, PT_BODY, PT_CABIN, PT_WING, PT_WHEEL, PT_GLASS, PT_RIM };
+struct Tri { V3 p[3]; uint8_t mat, flat, part; float bias; };
+static Tri s_tri[900];
+static int s_nt;
+
+static void add_tri(V3 a, V3 b, V3 c, uint8_t mat, uint8_t part, uint8_t flat = 0, float bias = 0) {
+    if (s_nt >= 900) return;
+    s_tri[s_nt++] = { { a, b, c }, mat, flat, part, bias };
+}
+static void add_quad(V3 a, V3 b, V3 c, V3 d, uint8_t mat, uint8_t part, uint8_t flat = 0, float bias = 0) {
+    add_tri(a, b, c, mat, part, flat, bias);
+    add_tri(a, c, d, mat, part, flat, bias);
+}
+static void add_box(float x0, float x1, float y0, float y1, float z0, float z1, uint8_t mat, uint8_t part) {
+    V3 v[8] = { {x0,y0,z0},{x1,y0,z0},{x1,y1,z0},{x0,y1,z0},{x0,y0,z1},{x1,y0,z1},{x1,y1,z1},{x0,y1,z1} };
+    static const int f[6][4] = { {0,1,2,3},{5,4,7,6},{4,0,3,7},{1,5,6,2},{3,2,6,7},{4,5,1,0} };
+    for (auto& q : f) add_quad(v[q[0]], v[q[1]], v[q[2]], v[q[3]], mat, part);
+}
+static V3 mix3(V3 a, V3 b, float t) { return { a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t }; }
+
+// wheel: cylinder along x, outer face at xo, thickness th
+static void add_wheel(float xo, float th, float cy, float cz, float R) {
+    const int N = 14;
+    const float xi = xo > 0 ? xo - th : xo + th;
+    V3 oo[N], ii[N], hub[N];
+    for (int k = 0; k < N; ++k) {
+        float a = k * 6.2831853f / N;
+        float y = cy + R * sinf(a), z = cz + R * cosf(a);
+        oo[k] = { xo, y, z }; ii[k] = { xi, y, z };
+        hub[k] = { xo + (xo > 0 ? 0.004f : -0.004f), cy + 0.58f * R * sinf(a), cz + 0.58f * R * cosf(a) };
+    }
+    for (int k = 0; k < N; ++k) {
+        int n = (k + 1) % N;
+        add_quad(ii[k], ii[n], oo[n], oo[k], MT_TYRE, PT_WHEEL);
+        V3 c0 = { hub[0].x, cy, cz };
+        add_tri(c0, hub[k], hub[n], MT_FLAT, PT_RIM, C_EXH, -0.03f);
+        add_quad(oo[k], oo[n], hub[n], hub[k], MT_TYRE, PT_WHEEL);
+    }
+    // centre cap
+    V3 c0 = { xo + (xo > 0 ? 0.008f : -0.008f), cy, cz };
+    for (int k = 0; k < N; ++k) {
+        int n = (k + 1) % N;
+        V3 a = { c0.x, cy + 0.2f * R * sinf(k * 6.2831853f / N), cz + 0.2f * R * cosf(k * 6.2831853f / N) };
+        V3 b = { c0.x, cy + 0.2f * R * sinf(n * 6.2831853f / N), cz + 0.2f * R * cosf(n * 6.2831853f / N) };
+        add_tri(c0, a, b, MT_FLAT, PT_RIM, C_OUT, -0.04f);
+    }
+}
+
+static void build_car_model() {
+    s_nt = 0;
+    // ---- body: lofted octagonal sections        z     hw    ybot  ysh   ytop  tw
+    float B[6][6] = { { 0.00f, 0.93f, 0.20f, 0.48f, 0.62f, 0.80f },
+                                   { 0.45f, 0.96f, 0.17f, 0.51f, 0.64f, 0.82f },
+                                   { 2.10f, 0.95f, 0.15f, 0.50f, 0.61f, 0.78f },
+                                   { 3.30f, 0.89f, 0.15f, 0.42f, 0.52f, 0.68f },
+                                   { 4.00f, 0.82f, 0.17f, 0.32f, 0.40f, 0.60f },
+                                   { 4.35f, 0.74f, 0.20f, 0.27f, 0.32f, 0.52f } };
+    const float ZS = 0.68f;
+    for (int k = 0; k < 6; ++k) B[k][0] *= ZS;
+    V3 ring[6][8];
+    for (int k = 0; k < 6; ++k) {
+        float z = B[k][0], hw = B[k][1], yb = B[k][2], ys = B[k][3], yt = B[k][4], tw = B[k][5];
+        ring[k][0] = { -hw * 0.88f, yb, z }; ring[k][1] = { -hw, yb + 0.06f, z }; ring[k][2] = { -hw, ys, z };
+        ring[k][3] = { -tw, yt, z };         ring[k][4] = { tw, yt, z };          ring[k][5] = { hw, ys, z };
+        ring[k][6] = { hw, yb + 0.06f, z };  ring[k][7] = { hw * 0.88f, yb, z };
+    }
+    for (int k = 0; k < 5; ++k)
+        for (int e = 0; e < 8; ++e) {
+            int n = (e + 1) % 8;
+            add_quad(ring[k][e], ring[k][n], ring[k + 1][n], ring[k + 1][e], MT_BODY, PT_BODY);
+        }
+    for (int k : { 0, 5 }) {                       // end caps
+        V3 c = { 0, 0.42f, B[k][0] };
+        for (int e = 0; e < 8; ++e) add_tri(c, ring[k][e], ring[k][(e + 1) % 8], MT_BODY, PT_BODY);
+    }
+    // ---- cabin: trapezoid sections             z     hwb    hwt   ybase  ytop
+    float K[6][5] = { { 0.85f, 0.66f, 0.58f, 0.62f, 0.64f },
+                                   { 1.20f, 0.67f, 0.58f, 0.63f, 0.86f },
+                                   { 2.05f, 0.67f, 0.56f, 0.62f, 0.88f },
+                                   { 2.60f, 0.67f, 0.58f, 0.60f, 0.83f },
+                                   { 3.05f, 0.66f, 0.60f, 0.56f, 0.64f },
+                                   { 3.20f, 0.64f, 0.60f, 0.54f, 0.55f } };
+    for (int k = 0; k < 6; ++k) { K[k][0] *= ZS; if (K[k][4] > 0.8f) K[k][4] += 0.05f; }
+    V3 cr[6][4];
+    for (int k = 0; k < 6; ++k) {
+        cr[k][0] = { -K[k][1], K[k][3], K[k][0] }; cr[k][1] = { -K[k][2], K[k][4], K[k][0] };
+        cr[k][2] = { K[k][2], K[k][4], K[k][0] };  cr[k][3] = { K[k][1], K[k][3], K[k][0] };
+    }
+    for (int k = 0; k < 5; ++k)
+        for (int e = 0; e < 3; ++e) {
+            bool glassTop = (e == 1 && (k == 0 || k == 4));     // rear glass and windscreen
+            add_quad(cr[k][e], cr[k][e + 1], cr[k + 1][e + 1], cr[k + 1][e], glassTop ? MT_GLASS : MT_BODY, glassTop ? PT_GLASS : PT_CABIN);
+        }
+    // pillars around the glass are the body colour: draw the glass inset by shrinking it towards the centre
+    // (rear glass inset decal)
+    {
+        float t0 = 0.14f, t1 = 0.80f;
+        V3 a = mix3(cr[0][1], cr[1][1], t0), b = mix3(cr[0][2], cr[1][2], t0), c = mix3(cr[0][2], cr[1][2], t1), d = mix3(cr[0][1], cr[1][1], t1);
+        float in = 0.14f;
+        a.x += in; d.x += in * 0.8f; b.x -= in; c.x -= in * 0.8f;
+        add_quad(a, b, c, d, MT_GLASS, PT_GLASS, 0, -0.012f);
+    }
+    // side windows (both sides), inset decals along the cabin flank
+    for (int sd = -1; sd <= 1; sd += 2) {
+        auto side = [&](int k, float t) {          // point on the cabin flank at section k, height fraction t
+            float yb = K[k][3], yt = K[k][4];
+            float y = yb + (yt - yb) * t;
+            float hw = K[k][1] + (K[k][2] - K[k][1]) * t;
+            return V3{ sd * (hw + 0.004f), y, K[k][0] };
+        };
+        V3 q[4][2]; int ks[4] = { 1, 2, 3, 3 };
+        (void)ks;
+        V3 a0 = side(1, 0.22f), a1 = side(1, 0.84f), b0 = side(2, 0.22f), b1 = side(2, 0.84f), c0 = side(3, 0.22f), c1 = side(3, 0.70f);
+        (void)q;
+        // shift the window slightly inward in z so pillars show
+        a0.z += 0.07f; a1.z += 0.12f; b1.z -= 0.0f; c0.z -= 0.05f; c1.z -= 0.18f;
+        add_quad(a0, b0, b1, a1, MT_GLASS, PT_GLASS, 0, -0.012f);
+        add_quad(b0, c0, c1, b1, MT_GLASS, PT_GLASS, 0, -0.012f);
+    }
+    // ---- twin racing stripes on bonnet / roof / deck
+    for (int sd = -1; sd <= 1; sd += 2) {
+        float xa = sd * 0.05f, xb = sd * 0.17f;
+        for (int k = 0; k < 4; ++k) {             // deck + bonnet
+            float za = B[k][0], zb = B[k + 1][0], ya = B[k][4] + 0.004f, yb = B[k + 1][4] + 0.004f;
+            if (za > 3.1f) continue;
+            if (k == 0) { za = 0.0f; }
+            if (zb > 3.1f) { float t = (3.1f - za) / (zb - za); zb = 3.1f; yb = ya + (yb - ya) * t; }
+            add_quad({ xa, ya, za }, { xb, ya, za }, { xb, yb, zb }, { xa, yb, zb }, MT_FLAT, PT_BODY, C_STRIPE, -0.012f);
+        }
+        for (int k = 1; k < 3; ++k) {             // roof
+            float t = 0.0f;
+            (void)t;
+            add_quad({ xa, K[k][4] + 0.004f, K[k][0] }, { xb, K[k][4] + 0.004f, K[k][0] },
+                     { xb, K[k + 1][4] + 0.004f, K[k + 1][0] }, { xa, K[k + 1][4] + 0.004f, K[k + 1][0] }, MT_FLAT, PT_CABIN, C_STRIPE, -0.012f);
+        }
+    }
+    // ---- rear face details (decals on z = 0)
+    const float zr = -0.006f;
+    for (int sd = -1; sd <= 1; sd += 2) {
+        float x0 = sd * 0.84f, x1 = sd * 0.33f;
+        add_quad({ x0, 0.34f, zr }, { x1, 0.34f, zr }, { x1, 0.51f, zr }, { x0, 0.51f, zr }, MT_FLAT, PT_BODY, C_TAIL, -0.01f);
+        float m0 = sd * 0.76f, m1 = sd * 0.42f;
+        add_quad({ m0, 0.395f, zr - 0.004f }, { m1, 0.395f, zr - 0.004f }, { m1, 0.455f, zr - 0.004f }, { m0, 0.455f, zr - 0.004f }, MT_FLAT, PT_BODY, C_TAILB, -0.012f);
+        // exhaust pipes
+        for (int k = 0; k < 8; ++k) {
+            float a0 = k * 0.7853982f, a1 = (k + 1) * 0.7853982f, cx = sd * 0.55f, cy = 0.215f;
+            add_tri({ cx, cy, zr - 0.006f }, { cx + 0.075f * cosf(a0), cy + 0.075f * sinf(a0), zr - 0.006f },
+                    { cx + 0.075f * cosf(a1), cy + 0.075f * sinf(a1), zr - 0.006f }, MT_FLAT, PT_BODY, C_EXH, -0.012f);
+            add_tri({ cx, cy, zr - 0.008f }, { cx + 0.04f * cosf(a0), cy + 0.04f * sinf(a0), zr - 0.008f },
+                    { cx + 0.04f * cosf(a1), cy + 0.04f * sinf(a1), zr - 0.008f }, MT_FLAT, PT_BODY, C_OUT, -0.013f);
+        }
+    }
+    add_quad({ -0.30f, 0.33f, zr }, { 0.30f, 0.33f, zr }, { 0.30f, 0.50f, zr }, { -0.30f, 0.50f, zr }, MT_FLAT, PT_BODY, C_TRIM, -0.01f);
+    for (int k = 0; k < 3; ++k)
+        add_quad({ -0.28f, 0.37f + k * 0.045f, zr - 0.003f }, { 0.28f, 0.37f + k * 0.045f, zr - 0.003f },
+                 { 0.28f, 0.385f + k * 0.045f, zr - 0.003f }, { -0.28f, 0.385f + k * 0.045f, zr - 0.003f }, MT_FLAT, PT_BODY, C_OUT, -0.012f);
+    add_quad({ -0.20f, 0.20f, zr }, { 0.20f, 0.20f, zr }, { 0.20f, 0.31f, zr }, { -0.20f, 0.31f, zr }, MT_FLAT, PT_BODY, C_OUT, -0.01f);
+    add_quad({ -0.185f, 0.21f, zr - 0.003f }, { 0.185f, 0.21f, zr - 0.003f }, { 0.185f, 0.30f, zr - 0.003f }, { -0.185f, 0.30f, zr - 0.003f }, MT_FLAT, PT_BODY, C_PLATE, -0.012f);
+    for (int k = 0; k < 5; ++k)
+        add_quad({ -0.16f + k * 0.07f, 0.23f, zr - 0.006f }, { -0.115f + k * 0.07f, 0.23f, zr - 0.006f },
+                 { -0.115f + k * 0.07f, 0.28f, zr - 0.006f }, { -0.16f + k * 0.07f, 0.28f, zr - 0.006f }, MT_FLAT, PT_BODY, C_OUT, -0.013f);
+    // ---- wing: plate, end plates, uprights
+    add_box(-1.02f, 1.02f, 0.70f, 0.755f, 0.06f, 0.42f, MT_BODY, PT_WING);
+    add_box(-1.04f, -1.00f, 0.60f, 0.82f, 0.04f, 0.46f, MT_BODY, PT_WING);
+    add_box(1.00f, 1.04f, 0.60f, 0.82f, 0.04f, 0.46f, MT_BODY, PT_WING);
+    add_box(-0.52f, -0.44f, 0.62f, 0.70f, 0.18f, 0.28f, MT_BODY, PT_WING);
+    add_box(0.44f, 0.52f, 0.62f, 0.70f, 0.18f, 0.28f, MT_BODY, PT_WING);
+    // ---- wheels
+    for (int sd = -1; sd <= 1; sd += 2) {
+        add_wheel(sd * 0.99f, 0.32f, 0.20f, 0.36f, 0.20f);
+        add_wheel(sd * 0.90f, 0.28f, 0.185f, 3.55f * ZS, 0.185f);
+    }
+}
+
+// rasterised result of one view
+struct Shot { int w, h; float ax, lightL, lightR; };
+} // namespace
+
 static void make_car_3q(SpriteId id, int dir) {
     Sprite& s = g_sprites[id];
-    const int CW = 148, FL = 38, REARW = 104;
-    Canvas c(s, CW, CAR_H);
-    Sprite tmpS; Canvas src(tmpS, CAR_W, CAR_H);
-    draw_car_base(src);
-    const bool left = dir < 0;
-    const float NX = (float)FL;                          // rear corner of the flank (left-turn geometry)
-    auto X = [&](float x) { return left ? x : (float)(CW - 1) - x; };
-    // point on the flank: u = 0 at the tail .. 1 at the nose, h = height above the ground at the tail's scale
-    auto sc = [](float u) { return 1.0f - 0.30f * u; };
-    auto P = [&](float u, float h, float inset = 0.0f, float recess = 0.0f) {
-        float uu = u + recess;
-        struct Pt { float x, y; } r;
-        r.x = X(NX + inset - uu * 40.0f);
-        r.y = 51.5f - uu * 7.0f - h * sc(uu);
-        return r;
+    build_car_model();
+    const float yaw = (dir < 0 ? 1.0f : -1.0f) * 0.40f;      // nose to the left for a left turn
+    const float ca = cosf(yaw), sa = sinf(yaw);
+    const float el = 0.07f, ce = cosf(el), se = sinf(el);
+    const float D = 15.0f, F = 56.0f * D;
+    struct P2 { float x, y, z; };
+    auto proj = [&](V3 p, P2& o, V3* world = nullptr) {
+        float x = p.x * ca - p.z * sa, z = p.x * sa + p.z * ca, y = p.y;
+        if (world) *world = { x, y, z };
+        float zc = z * ce - y * se + D;
+        o = { F * x / zc, -F * (y * ce + z * se) / zc, zc };
     };
-    auto poly = [&](const float* v, int n, uint8_t col) { c.poly(v, n, col); };
-    const uint8_t cSpec = C_SPEC, cBL = C_BL, cBM = C_BM, cBD = C_BD;
-    const uint8_t lit = left ? cBL : cBM, mid = left ? cBM : cBD, dark = cBD;
+    // bounding box
+    float mnx = 1e9f, mxx = -1e9f;
+    for (int t = 0; t < s_nt; ++t) for (int k = 0; k < 3; ++k) { P2 o; proj(s_tri[t].p[k], o); mnx = fminf(mnx, o.x); mxx = fmaxf(mxx, o.x); }
+    P2 ground; proj({ 0, 0, 0 }, ground);
+    const int CW = (int)ceilf(mxx - mnx) + 6;
+    const float ox = 3.0f - mnx, oy = 51.0f - ground.y;
+    Canvas c(s, CW, CAR_H);
+    const int H = CAR_H;
+    float* zb = (float*)plat::allocLarge(CW * H * sizeof(float));
+    uint8_t* part = (uint8_t*)plat::allocLarge(CW * H);
+    uint8_t* col = (uint8_t*)plat::allocLarge(CW * H);
+    for (int i = 0; i < CW * H; ++i) { zb[i] = 1e9f; part[i] = 0; col[i] = 0; }
+    // lighting
+    float Lx = -0.30f, Ly = 0.78f, Lz = -0.50f; { float l = sqrtf(Lx * Lx + Ly * Ly + Lz * Lz); Lx /= l; Ly /= l; Lz /= l; }
+    static const float bay[4] = { 0.0f, 0.5f, 0.75f, 0.25f };
 
-    c.ellipse(left ? 84 : 64, 54, 68, 4.5f, SHADOW);
-    // ---- body flank: shoulder line from tail deck down to the nose, sill underneath
-    static const float us[] = { 0.0f, 0.12f, 0.3f, 0.5f, 0.68f, 0.85f, 1.0f };
-    static const float hs[] = { 25.0f, 25.0f, 24.5f, 23.5f, 21.0f, 17.5f, 14.0f };   // shoulder
-    float body[28]; int bn = 0;
-    for (int k = 0; k < 7; ++k) { auto q = P(us[k], hs[k]); body[bn++] = q.x; body[bn++] = q.y; }
-    for (int k = 6; k >= 0; --k) { auto q = P(us[k], 3.0f); body[bn++] = q.x; body[bn++] = q.y; }
-    poly(body, 14, C_BM);
-    // paint: lit shoulder, mid flank, dark sill; dithered between
-    for (int y = 20; y < 54; ++y)
+    for (int t = 0; t < s_nt; ++t) {
+        const Tri& T = s_tri[t];
+        P2 q[3]; V3 w[3];
+        for (int k = 0; k < 3; ++k) proj(T.p[k], q[k], &w[k]);
+        // face normal (world), oriented towards the camera
+        V3 u = { w[1].x - w[0].x, w[1].y - w[0].y, w[1].z - w[0].z }, v = { w[2].x - w[0].x, w[2].y - w[0].y, w[2].z - w[0].z };
+        V3 n = { u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x };
+        float nl = sqrtf(n.x * n.x + n.y * n.y + n.z * n.z);
+        if (nl < 1e-9f) continue;
+        n = { n.x / nl, n.y / nl, n.z / nl };
+        V3 cen = { (w[0].x + w[1].x + w[2].x) / 3, (w[0].y + w[1].y + w[2].y) / 3, (w[0].z + w[1].z + w[2].z) / 3 };
+        V3 toCam = { -cen.x, 1.6f - cen.y, -D - cen.z };
+        if (n.x * toCam.x + n.y * toCam.y + n.z * toCam.z < 0) n = { -n.x, -n.y, -n.z };
+        float d = fmaxf(0.0f, n.x * Lx + n.y * Ly + n.z * Lz);
+        float bv[3];
+        for (int k = 0; k < 3; ++k) {
+            float grad = (0.62f - T.p[k].y) * 0.42f;                  // darker towards the ground
+            bv[k] = 0.14f + 0.74f * d - (grad > 0 ? grad : grad * 0.4f);
+        }
+        // screen-space triangle
+        float x0 = q[0].x + ox, y0 = q[0].y + oy, x1 = q[1].x + ox, y1 = q[1].y + oy, x2 = q[2].x + ox, y2 = q[2].y + oy;
+        float area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+        if (fabsf(area) < 1e-6f) continue;
+        int xmin = (int)floorf(fminf(x0, fminf(x1, x2))), xmax = (int)ceilf(fmaxf(x0, fmaxf(x1, x2)));
+        int ymin = (int)floorf(fminf(y0, fminf(y1, y2))), ymax = (int)ceilf(fmaxf(y0, fmaxf(y1, y2)));
+        if (xmin < 0) xmin = 0; if (ymin < 0) ymin = 0; if (xmax > CW - 1) xmax = CW - 1; if (ymax > H - 1) ymax = H - 1;
+        for (int y = ymin; y <= ymax; ++y)
+            for (int x = xmin; x <= xmax; ++x) {
+                float px = x + 0.5f, py = y + 0.5f;
+                float l0 = ((x1 - px) * (y2 - py) - (x2 - px) * (y1 - py)) / area;
+                float l1 = ((x2 - px) * (y0 - py) - (x0 - px) * (y2 - py)) / area;
+                float l2 = 1.0f - l0 - l1;
+                const float eps = -0.002f;
+                if (l0 < eps || l1 < eps || l2 < eps) continue;
+                float z = l0 * q[0].z + l1 * q[1].z + l2 * q[2].z + T.bias;
+                int idx = y * CW + x;
+                if (z >= zb[idx]) continue;
+                zb[idx] = z; part[idx] = T.part;
+                float b = l0 * bv[0] + l1 * bv[1] + l2 * bv[2];
+                float dv = b + (bay[(x & 1) + 2 * (y & 1)] - 0.375f) * 0.14f;
+                uint8_t o;
+                switch (T.mat) {
+                case MT_BODY:  o = dv > 0.80f ? C_SPEC : dv > 0.52f ? C_BL : dv > 0.22f ? C_BM : C_BD; break;
+                case MT_GLASS: o = (dv > 0.74f && ((x + y) & 1) == 0) || dv > 1.0f ? C_GL : C_GD; break;
+                case MT_TYRE:  o = dv > 0.60f ? C_TYL : C_TY; break;
+                default:       o = T.flat; break;
+                }
+                col[idx] = o;
+            }
+    }
+    // composite: soft ground shadow first, then the car with dark outlines on the nearer parts
+    c.ellipse(CW * 0.5f + 4, 53.5f, CW * 0.46f, 4.2f, SHADOW);
+    for (int y = 0; y < H; ++y)
         for (int x = 0; x < CW; ++x) {
-            if (c.get(x, y) != C_BM) continue;
-            int fx = left ? x : CW - 1 - x;
-            float u = (NX - fx) / 40.0f; if (u < 0) u = 0;
-            float top = P(u, 25.0f - 11.0f * u * u).y, bot = P(u, 3.0f).y;   // shoulder and sill at this u
-            float t = (y - top) / (bot - top + 0.01f);
-            uint8_t col = t < 0.10f ? (left ? cSpec : cBL) : t < 0.42f ? lit : t < 0.78f ? mid : dark;
-            if (t > 0.30f && t < 0.50f && ((fx + y) & 1) == 0) col = mid;
-            if (t > 0.70f && t < 0.86f && ((fx + y) & 1) == 0) col = dark;
-            c.set(x, y, col);
+            int i = y * CW + x;
+            if (!part[i]) continue;
+            bool edge = false;
+            const int nx[4] = { -1, 1, 0, 0 }, ny[4] = { 0, 0, -1, 1 };
+            for (int k = 0; k < 4 && !edge; ++k) {
+                int xx = x + nx[k], yy = y + ny[k];
+                if (xx < 0 || yy < 0 || xx >= CW || yy >= H || !part[yy * CW + xx]) { edge = true; break; }
+                int j = yy * CW + xx;
+                if (part[j] != part[i] && zb[j] > zb[i] + 0.10f) edge = true;
+            }
+            c.set(x, y, edge ? C_OUT : col[i]);
         }
-    // character line along the flank, door cut, rear-quarter air intakes
-    for (int k = 0; k <= 20; ++k) { float u = k / 20.0f; auto q = P(u, 15.0f - 3.0f * u * u); c.set((int)q.x, (int)q.y, left ? cSpec : cBL); }
-    { auto a1 = P(0.40f, 22.0f), a2 = P(0.40f, 5.0f); c.thick(a1.x, a1.y, a2.x, a2.y, 0.5f, C_OUT); }
-    for (int k = 0; k < 4; ++k) {
-        auto a1 = P(0.04f + k * 0.035f, 22.0f), a2 = P(0.10f + k * 0.035f, 11.0f);
-        c.thick(a1.x, a1.y, a2.x, a2.y, 0.6f, C_OUT);
-    }
-    // ---- cabin: narrower than the body, so inset towards the rear face
-    static const float cu[] = { 0.0f, 0.18f, 0.40f, 0.52f, 0.62f };
-    static const float ch[] = { 50.0f, 50.0f, 47.0f, 40.0f, 23.0f };      // roof line down the windscreen
-    float cab[24]; int cn = 0;
-    for (int k = 0; k < 5; ++k) { auto q = P(cu[k], ch[k], 29.0f, 0.04f); cab[cn++] = q.x; cab[cn++] = q.y; }
-    for (int k = 4; k >= 0; --k) { auto q = P(cu[k], 24.5f, 29.0f, 0.04f); cab[cn++] = q.x; cab[cn++] = q.y; }
-    poly(cab, 10, C_BM);
-    for (int y = 0; y < 30; ++y)
-        for (int x = 0; x < CW; ++x)
-            if (c.get(x, y) == C_BM) c.set(x, y, y < 8 ? (left ? cSpec : cBL) : lit);
-    // side glass
-    float gl[24]; int gn = 0;
-    for (int k = 0; k < 5; ++k) { auto q = P(cu[k] + 0.02f, ch[k] - 3.5f - (k == 4 ? 3.0f : 0.0f), 29.0f, 0.04f); gl[gn++] = q.x; gl[gn++] = q.y; }
-    for (int k = 4; k >= 0; --k) { auto q = P(cu[k] + 0.02f, 27.5f, 29.0f, 0.04f); gl[gn++] = q.x; gl[gn++] = q.y; }
-    poly(gl, 10, C_GD);
-    for (int y = 0; y < 30; ++y)
-        for (int x = 0; x < CW; ++x)
-            if (c.get(x, y) == C_GD && y < 12 && ((x + y) & 1) == 0) c.set(x, y, C_GL);
-    { auto q1 = P(0.28f, 45.0f, 29.0f, 0.04f), q2 = P(0.22f, 29.0f, 29.0f, 0.04f); c.thick(q1.x, q1.y, q2.x, q2.y, 0.8f, C_GL); }
-    // ---- wheels (the rear tyre's tread is part of the rear face drawn on top)
-    {
-        auto w1 = P(0.17f, 9.5f);  float s1 = sc(0.17f);
-        c.ellipse(w1.x, w1.y, 5.0f * s1 + 1.0f, 9.5f * s1, C_TY);
-        c.ellipse(w1.x, w1.y, 3.0f * s1 + 0.6f, 6.2f * s1, C_EXH);
-        c.ellipse(w1.x, w1.y, 1.2f * s1, 2.2f * s1, C_OUT);
-        auto w2 = P(0.84f, 8.0f);  float s2 = sc(0.84f);
-        c.ellipse(w2.x, w2.y, 4.2f * s2 + 0.6f, 8.0f * s2, C_TY);
-        c.ellipse(w2.x, w2.y, 2.4f * s2 + 0.4f, 5.2f * s2, C_EXH);
-        c.ellipse(w2.x, w2.y, 1.0f * s2, 1.8f * s2, C_OUT);
-        // arches shadow above the wheels
-        c.thick(w1.x - 4, w1.y - 10 * s1, w1.x + 4, w1.y - 10 * s1, 0.5f, C_OUT);
-        c.thick(w2.x - 3, w2.y - 8.5f * s2, w2.x + 3, w2.y - 8.5f * s2, 0.5f, C_OUT);
-    }
-    // nose: pop-up headlamp and bumper corner
-    { auto q = P(0.98f, 15.0f); c.rect((int)(left ? q.x : q.x - 3), (int)q.y, 3, 3, C_PLATE); }
+    plat::freeLarge(zb); plat::freeLarge(part); plat::freeLarge(col);
 
-    // ---- rear face: resampled, with the upper body leaning towards the nose
-    const int rx0 = left ? FL : CW - FL - REARW;
-    for (int y = 0; y < CAR_H; ++y) {
-        int off = y < 34 ? (int)lroundf(dir * 4.0f * (34 - y) / 34.0f) : 0;
-        for (int x = rx0 - 6; x < rx0 + REARW + 6; ++x) {
-            int sxp = (x - off - rx0) * CAR_W / REARW;
-            if (sxp < 0 || sxp >= CAR_W) continue;
-            uint8_t v = src.get(sxp, y);
-            if (v && v != SHADOW) c.set(x, y, v);
-        }
-    }
-    c.outline(C_OUT);
-    plat::freeLarge(tmpS.px);
+    P2 rc, tl, tr; proj({ 0, 0.40f, 0 }, rc); proj({ -0.57f, 0.42f, 0 }, tl); proj({ 0.57f, 0.42f, 0 }, tr);
     s.worldW = 700.0f * CW / CAR_W;
     s.hitW = 0.95f;
     s.emissive = (1 << C_TAIL) | (1 << C_TAILB);
-    s.anchorX = (int16_t)(rx0 + REARW / 2);
-    s.lightL = (int16_t)(rx0 + 20 * REARW / CAR_W);
-    s.lightR = (int16_t)(rx0 + 92 * REARW / CAR_W);
+    s.anchorX = (int16_t)lroundf(rc.x + ox);
+    s.lightL = (int16_t)lroundf(fminf(tl.x, tr.x) + ox);
+    s.lightR = (int16_t)lroundf(fmaxf(tl.x, tr.x) + ox);
 }
 
 void car_palette(uint16_t out[16], const Livery& l, bool braking) {
