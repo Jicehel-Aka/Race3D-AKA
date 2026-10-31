@@ -471,6 +471,17 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
                 }
             }
         }
+        if (!start && ps.idx >= PIT_FIRST && ps.idx < PIT_FIRST + PIT_LEN) {     // pit lane on the right of the road
+            bool box = ps.idx >= PIT_BOX0 && ps.idx < PIT_BOX1;
+            float a = cx + w * PIT_X0, b = cx + w * PIT_X1;
+            uint16_t pc = box ? lerp(road, rgb(250, 200, 30), 150) : lerp(road, rgb(120, 130, 150), 90);
+            if (box && ((ps.idx + (int)(t * 2)) & 1)) pc = lerp(road, rgb(250, 120, 30), 120);
+            span(a, b, lerp(pc, th.fog, f));
+            uint16_t wl = lerp(rgb(245, 245, 245), th.fog, f);
+            span(a - lw, a + lw, wl);
+            span(b - lw, b + lw, wl);
+            if (ps.idx == PIT_FIRST || ps.idx == PIT_BOX0 || ps.idx == PIT_BOX1 - 1) span(a, b, wl);
+        }
         span(r0, r1, rumble);
         span(r1, W, grass);
         // ground texture: world-fixed dashes (tufts, ripples, wind streaks, cracks, glints)

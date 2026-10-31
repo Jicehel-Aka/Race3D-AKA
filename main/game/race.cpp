@@ -73,7 +73,7 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
     nitro = 1.0f; nitroOn = false; steer = 0;
     skyOffset = nearOffset = 0; shake = 0; offroad = skid = 0;
     gear = 1; rpm = 0;
-    damage = 0; perf = 1; sputter = 0; sputterNext = 2; damageCool = 0; smokeT = 0; spinT = 0;
+    pitting = false; pitT = 0; damage = 0; perf = 1; sputter = 0; sputterNext = 2; damageCool = 0; smokeT = 0; spinT = 0;
     const DiffProfile& d = kDiff[diff];
 
     // AI drivers: random strengths, strongest on pole
@@ -131,6 +131,20 @@ void Race::update(float dt, const plat::Input& in) {
     }
 
     collisions(dt);
+    // pit stop: stop in the box of the pit lane (right side, just after the line) to get the engine repaired
+    {
+        static const float kRepair[DIFF_COUNT] = { 0.34f, 0.26f, 0.20f, 0.16f };     // damage repaired per second
+        int pidx = track.indexAt(carZ(p));
+        bool inBox = pidx >= PIT_BOX0 && pidx < PIT_BOX1 && p.x > PIT_X0 && p.x < PIT_X1;
+        bool on = !autopilot && !demo && started && inBox && speedKmh() < 30.0f && !p.retired && (damage > 0.0f || nitro < 1.0f);
+        if (on) {
+            if (!pitting) { pitting = true; pitT = 0; if (damage > 0.02f) ev.pitStart = true; }
+            pitT += dt;
+            nitro = fminf(1.0f, nitro + dt * 0.5f);
+            if (damage > 0) { damage -= kRepair[difficulty] * dt; if (damage <= 0) { damage = 0; ev.pitDone = true; } }
+            if (damage <= 0 && nitro >= 1.0f) pitting = false;
+        } else pitting = false;
+    }
     for (auto& c : cars) laps_(c);
     ranking();
 

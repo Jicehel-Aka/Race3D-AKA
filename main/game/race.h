@@ -7,6 +7,9 @@
 
 constexpr int   CAR_COUNT = 8;
 constexpr float MAX_SPEED = SEG_LEN * 60.0f;     // 12000 units/s ~ 240 km/h
+// pit lane: right-hand side of the road, just after the start line (segment indices)
+constexpr int   PIT_FIRST = 8, PIT_LEN = 22, PIT_BOX0 = 14, PIT_BOX1 = 26;
+constexpr float PIT_X0 = 0.42f, PIT_X1 = 0.96f;
 constexpr float CAM_HEIGHT = 1000.0f;
 constexpr float CAM_DEPTH = 0.8391f;             // 1 / tan(100deg / 2)
 constexpr float PLAYER_Z = CAM_HEIGHT * CAM_DEPTH;
@@ -50,7 +53,7 @@ enum HitKind : uint8_t {
 };
 
 struct RaceEvents {     // things the renderer / game wants to react to this frame
-    bool retired = false, crash = false, bump = false, lap = false, bestLap = false, finalLap = false, finished = false;
+    bool pitStart = false, pitDone = false, retired = false, crash = false, bump = false, lap = false, bestLap = false, finalLap = false, finished = false;
     uint8_t hit = HIT_NONE;     // set together with crash / bump
     int8_t hitSide = 0;         // -1 / +1 : side of the player where the contact happened
     uint8_t hitSpr = 0;         // sprite id of the obstacle (scenery hits)
@@ -84,6 +87,8 @@ public:
     float sputter = 0;                     // > 0 while the engine is cutting out
     float sputterNext = 2;
     float damageCool = 0;
+    bool  pitting = false;                 // stopped in the pit box, being repaired
+    float pitT = 0;
     int   pullDir = 1;
     void  addDamage(float d);
     float offroad = 0, skid = 0;

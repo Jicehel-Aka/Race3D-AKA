@@ -321,6 +321,9 @@ void handle_events() {
         else if (lastD < 0.8f && d >= 0.8f) message("ENGINE FAILING!", rgb(255, 120, 90), rgb(190, 20, 10), 2.2f);
         lastD = d;
     }
+    if (e.pitStart) message("PIT STOP", rgb(255, 230, 120), rgb(200, 120, 10), 1.5f);
+    if (e.pitDone) { plat::playSfx(plat::SFX_LAP); message("ENGINE REPAIRED", rgb(160, 255, 200), rgb(20, 160, 90), 1.8f); }
+    if (e.lap && g_race.damage > 0.25f && !g_race.player().retired) message("PIT LANE ON THE RIGHT", rgb(255, 230, 120), rgb(200, 120, 10), 2.0f);
     if (e.retired) {
         plat::playSfx(plat::SFX_HIT_HEAVY);
         message("ENGINE DEAD", rgb(255, 90, 70), rgb(120, 10, 10), 4.0f);
