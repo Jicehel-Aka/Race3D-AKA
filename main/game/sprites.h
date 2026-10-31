@@ -17,6 +17,8 @@ enum SpriteId : uint8_t {
     // roadside dressing
     SPR_CRATES, SPR_BARRIER, SPR_DUNEGRASS, SPR_FENCE, SPR_HAYBALE, SPR_FLOWERS, SPR_POLE,
     SPR_CAR_LEFT3Q, SPR_CAR_RIGHT3Q,   // three-quarter rear views (strong turns, spin-outs)
+    SPR_ART_FIRST,                      // imported car pictures: 5 frames per driver (straight, 2 mild, 2 strong turns)
+    SPR_ART_LAST = SPR_ART_FIRST + 8 * 5 - 1,
     SPR_COUNT
 };
 
@@ -28,6 +30,8 @@ struct Sprite {
     uint16_t emissive = 0;   // bitmask of palette indices that ignore ambient light
     int16_t anchorX = 0;     // cars: x of the rear-face centre inside the sprite (0 = centred)
     int16_t lightL = 0, lightR = 0;   // cars: x of the tail lights (0 = default 20 / 92)
+    bool ownPal = false;              // imported pictures carry their own 16 colour palette
+    uint16_t pal[16] = {};
 };
 
 extern Sprite g_sprites[SPR_COUNT];

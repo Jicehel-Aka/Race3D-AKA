@@ -36,6 +36,7 @@ struct Car {
     bool finished = false;
     float finishTime = 0;
     int place = 0;
+    int look = 0;          // which imported car picture this driver uses
     bool retired = false;  // engine dead: the car coasts to a stop and is out of the race
 };
 

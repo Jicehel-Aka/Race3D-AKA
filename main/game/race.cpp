@@ -87,6 +87,7 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
         c.name = kDrivers[i].name;
         c.livery = { kDrivers[i].body, kDrivers[i].stripe };
         c.isPlayer = (i == playerIdx);
+        c.look = i;
         int row = i / 2, col = i % 2;
         c.dist = -SEG_LEN * (3.0f + row * 6.0f) - (col ? SEG_LEN * 2.0f : 0.0f);
         c.x = col ? 0.45f : -0.45f;

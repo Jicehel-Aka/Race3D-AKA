@@ -1,5 +1,6 @@
 // sprites.cpp - all graphics are drawn by code at boot (no asset files).
 #include "sprites.h"
+#include "car_art.h"
 #include "gfx.h"
 #include "platform.h"
 #include "font8x8.h"
@@ -218,7 +219,44 @@ static void draw_car_base(Canvas& c) {
 static void make_car_3q(SpriteId id, int dir);
 static void render_car(SpriteId id, float yaw, float el, bool straight);
 
+// imported car pictures: straight + sheared frames for turns
+static void make_car_art() {
+    for (int d = 0; d < CAR_ART_COUNT; ++d) {
+        for (int st = 0; st < 5; ++st) {
+            Sprite& s = g_sprites[SPR_ART_FIRST + d * 5 + st];
+            Canvas c(s, CAR_ART_W, CAR_ART_H);
+            const uint8_t* src = kCarArtPx[d];
+            const int dir = (st == 1 || st == 3) ? -1 : (st == 0 ? 0 : 1);       // -1 left, +1 right
+            const float amp = st >= 3 ? 11.0f : (st >= 1 ? 5.0f : 0.0f);
+            for (int y = 0; y < CAR_ART_H; ++y) {
+                int off = (dir && y < 46) ? (int)lroundf(dir * amp * (46 - y) / 46.0f) : 0;
+                // the lower body slips the other way a little, so the car looks yawed rather than leaning
+                if (dir && y >= 46) off = (int)lroundf(-dir * amp * 0.12f);
+                for (int x = 0; x < CAR_ART_W; ++x) {
+                    int sx = x - off;
+                    if ((unsigned)sx >= (unsigned)CAR_ART_W) continue;
+                    uint8_t v = src[y * CAR_ART_W + sx];
+                    if (v) c.set(x, y, v);
+                }
+            }
+            c.ellipse(56, 54.0f, 50, 3.6f, SHADOW);
+            // the picture is drawn over the shadow
+            for (int y = 0; y < CAR_ART_H; ++y)
+                for (int x = 0; x < CAR_ART_W; ++x) {
+                    int off = (dir && y < 46) ? (int)lroundf(dir * amp * (46 - y) / 46.0f) : ((dir && y >= 46) ? (int)lroundf(-dir * amp * 0.12f) : 0);
+                    int sx = x - off;
+                    if ((unsigned)sx < (unsigned)CAR_ART_W && src[y * CAR_ART_W + sx]) c.set(x, y, src[y * CAR_ART_W + sx]);
+                }
+            s.worldW = 700.0f; s.hitW = 0.95f; s.emissive = 0;
+            s.ownPal = true;
+            for (int k = 0; k < 16; ++k) s.pal[k] = kCarArtPal[d][k];
+            s.lightL = 25; s.lightR = 87;
+        }
+    }
+}
+
 static void make_cars() {
+    make_car_art();
 #if CAR_USE_MODEL
     render_car(SPR_CAR, 0.0f, 0.02f, true);
     render_car(SPR_CAR_LEFT, 0.17f, 0.03f, false);

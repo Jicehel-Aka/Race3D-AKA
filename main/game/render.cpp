@@ -555,16 +555,27 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
     const Theme& th = g_themes[r.track.theme];
     int id = SPR_CAR;
     float sv = c.steerVis;
+    const bool art = g_sprites[SPR_ART_FIRST].px != nullptr;
+    if (art) {                                            // imported pictures: straight, mild and strong (sheared) turns
+        int b = SPR_ART_FIRST + (c.look % 8) * 5;
+        id = b;
+        if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) id = b + (r.spinDir < 0 ? 3 : 4);
+        else if (sv < -0.9f) id = b + 3;
+        else if (sv < -0.3f) id = b + 1;
+        else if (sv > 0.9f) id = b + 4;
+        else if (sv > 0.3f) id = b + 2;
+    } else {
     if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) id = r.spinDir < 0 ? SPR_CAR_LEFT3Q : SPR_CAR_RIGHT3Q;   // yawed by an impact
     else if (sv < -0.9f) id = SPR_CAR_LEFT3Q;
     else if (sv < -0.3f) id = SPR_CAR_LEFT;
     else if (sv > 0.9f) id = SPR_CAR_RIGHT3Q;
     else if (sv > 0.3f) id = SPR_CAR_RIGHT;
+    }
     const Sprite& sp = g_sprites[id];
     const float sc = dw / 112.0f;                         // screen pixels per sprite pixel
     if (sp.anchorX) { x += (int)((56 - sp.anchorX) * sc); dw = (int)(sp.w * sc + 0.5f); }   // wider three-quarter sprites
     uint16_t base[16];
-    car_palette(base, c.livery, c.braking);
+    if (sp.ownPal) memcpy(base, sp.pal, sizeof base); else car_palette(base, c.livery, c.braking);
     int amb = th.ambient < 256 ? th.ambient + 40 : 256;
     const uint16_t* pal = lit_palette(base, sp.emissive, amb, th.fog, fog);
     blit(sp, pal, x, y, dw, dh, clip, false);
