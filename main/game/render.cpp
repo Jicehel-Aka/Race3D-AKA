@@ -250,12 +250,61 @@ void draw_sky(const Race& r, float time) {
     }
 }
 
+// Glacier Run backdrop: a hazy back range, then snow-capped peaks with sunlit and shaded faces,
+// bare rock with strata, blue glacier tongues with crevasses and snow couloirs.
+void glacier_far(const Track& tr, const Theme& th, int off, int baseY) {
+    const int M = Track::BG_W - 1;
+    for (int x = 0; x < W; ++x) {
+        int col = (x + off) & M;
+        uint16_t* p = fb + x;
+        // far back range: slower parallax, pale and lower
+        int bcol = (((x + off / 2) * 3) + 411) & M;
+        int hb = 12 + tr.farH[bcol] * 6 / 10;
+        for (int y = baseY - hb < 0 ? 0 : baseY - hb; y < baseY && y < H; ++y) {
+            int alt = baseY - y;
+            uint16_t c = lerp(th.fog, th.farCol, 80);
+            if (alt > hb - 9) c = lerp(c, rgb(246, 250, 255), 170);
+            p[y * W] = c;
+        }
+        // main peaks
+        int h = tr.farH[col];
+        uint32_t hc = hash32(col >> 2);
+        int snowLine = 32 + (int)(hash32(col) % 4) + (int)(hc % 7);
+        int slope = (int)tr.farH[(col + 3) & M] - (int)tr.farH[(col - 3) & M];
+        bool shade = slope > 0;                       // faces away from the low sun
+        bool ice = (hash32(col >> 3) % 3) == 0;      // glacier tongue
+        bool couloir = (hash32(col >> 1) % 6) == 0;  // snow gully down the rock
+        int gully = snowLine - 10 - (int)(hc % 8);
+        for (int y = baseY - h < 0 ? 0 : baseY - h; y < baseY && y < H; ++y) {
+            int alt = baseY - y, d = h - alt;
+            uint16_t c;
+            if (alt > snowLine || (couloir && alt > gully)) {
+                int k = d * 7 > 150 ? 150 : d * 7;      // bright at the crest, bluer lower down
+                c = shade ? lerp(rgb(160, 176, 228), rgb(104, 124, 192), k) : lerp(rgb(255, 255, 255), rgb(196, 218, 246), k);
+                if (shade && (alt + col * 2) % 9 == 0) c = lerp(c, rgb(84, 104, 176), 70);   // faint gullies
+            } else {
+                int haze = alt < 14 ? 120 - alt * 6 : 36;
+                if (ice) {
+                    c = shade ? rgb(86, 130, 196) : rgb(150, 204, 238);
+                    if ((col * 2 + alt * 3) % 11 == 0) c = scale(c, 200);
+                } else {
+                    c = shade ? rgb(52, 60, 100) : rgb(104, 110, 140);
+                    if (alt % 6 == 0) c = scale(c, 215);
+                }
+                c = lerp(c, th.fog, haze);
+            }
+            p[y * W] = c;
+        }
+    }
+}
+
 void draw_layers(const Race& r, int baseY) {
     const Track& tr = r.track;
     const Theme& th = g_themes[tr.theme];
     const int M = Track::BG_W - 1;
     int off = (int)r.skyOffset, offN = (int)r.nearOffset;
-    for (int x = 0; x < W; ++x) {
+    if (tr.theme == THEME_GLACIER) glacier_far(tr, th, off, baseY);
+    for (int x = 0; x < W && tr.theme != THEME_GLACIER; ++x) {
         int col = (x + off) & M;
         int h = tr.farH[col];
         int top = baseY - h;

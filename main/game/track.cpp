@@ -503,7 +503,7 @@ void backdrop(Track& t) {
         } else if (t.theme == THEME_GLACIER) {
             float n0 = noise1(r, tbl, 64, u * 0.25f) * 0.55f + noise1(r, tbl, 64, u * 0.6f + 13) * 0.3f + noise1(r, tbl, 64, u * 2.0f + 7) * 0.15f;
             float ridge = 1.0f - fabsf(2.0f * n0 - 1.0f);
-            fh = 12 + ridge * ridge * 62;
+            fh = 12 + ridge * ridge * 62 + noise1(r, tbl, 64, u * 8.0f + 19) * 6.0f;   // rocky serration
         } else if (t.theme == THEME_HARBOR) {
             int b = x / 22;
             Rng br(b * 6361 + 17);
