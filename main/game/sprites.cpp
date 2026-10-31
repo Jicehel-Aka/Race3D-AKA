@@ -268,23 +268,53 @@ static void make_palm() {
 
 static void make_pine() {
     Sprite& s = g_sprites[SPR_PINE];
-    Canvas c(s, 76, 156);
-    c.ellipse(38, 152, 26, 3.5f, SHADOW);
-    c.rect(33, 128, 10, 25, V_TM);
-    c.rect(33, 128, 3, 25, V_TL);
-    c.rect(40, 128, 3, 25, V_TD);
-    for (int i = 0; i < 5; ++i) {
-        float apex = 4 + i * 23.0f, base = apex + 48 - i * 2, hw = 37 - i * 5.5f;
+    Canvas c(s, 80, 164);
+    Rng r(2024);
+    c.ellipse(40, 160, 27, 3.5f, SHADOW);
+    // trunk with bark ridges
+    c.rect(35, 132, 10, 28, V_TM);
+    c.rect(35, 132, 3, 28, V_TL);
+    c.rect(42, 132, 3, 28, V_TD);
+    for (int y = 134; y < 160; y += 5) c.rect(37 + (y % 3), y, 3, 1, V_TD);
+    // tiers from the top down: each skirt droops in pointed boughs and shades the one below
+    const int tiers = 6;
+    for (int i = 0; i < tiers; ++i) {
+        float apex = 2 + i * 21.0f;
+        float base = apex + 30 + i * 2.0f;
+        float hw = 11 + i * 5.2f;
         for (int y = (int)apex; y <= (int)base; ++y) {
             float t = (y - apex) / (base - apex);
-            float half = hw * t;
-            int zig = ((y + i) % 4 < 2) ? 0 : 2;
-            for (int x = (int)(38 - half) - zig; x <= (int)(38 + half) + zig; ++x) {
-                uint8_t col = x < 38 - half * 0.15f ? V_LM : V_LD;
-                if (t < 0.22f || (x < 38 - half * 0.6f && ((x + y) % 5 == 0))) col = V_LL;
-                c.set(x, y, col);
+            float half = hw * (0.10f + 0.90f * t);
+            for (int x = (int)(40 - half); x <= (int)(40 + half); ++x) {
+                float u = (x - (40 - half)) / (2 * half + 0.001f);
+                bool dith = u > 0.44f && u < 0.60f && ((x + y) & 1);
+                c.set(x, y, (u < 0.52f) != dith ? V_LM : V_LD);
             }
         }
+        // boughs: drooping strokes from the centre line out to the edge
+        int strokes = 4 + i;
+        for (int k = 0; k < strokes; ++k) {
+            float y0 = apex + 6 + (base - apex - 8) * (k + 0.5f) / strokes;
+            float t = (y0 - apex) / (base - apex);
+            float half = hw * (0.10f + 0.90f * t);
+            for (int sd = -1; sd <= 1; sd += 2) {
+                float ex = 40 + sd * half * (0.92f + 0.1f * r.f()), ey = y0 + 5 + 3 * r.f();
+                uint8_t col = sd < 0 ? V_LD : V_OUT;
+                c.thick(40 + sd * 2.0f, y0 - 2, ex, ey, 0.55f, col);
+                if (sd < 0 && (k & 1)) c.thick(40 - 4.0f, y0 - 5, ex + 2, ey - 3, 0.5f, V_LL);   // lit / snowy bough
+            }
+        }
+        // pointed, drooping tips along the lower edge
+        for (float x = 40 - hw; x < 40 + hw - 1; x += 10.0f) {
+            float e = fabsf(x + 5.0f - 40) / hw;
+            float dep = 5.0f + r.f() * 3.0f - e * 2.0f;
+            bool lit = x + 5.0f < 40 + hw * 0.04f;
+            c.quad(x, base - 3, x + 10, base - 3, x + 5.0f, base + dep, x + 5.0f, base + dep, lit ? V_LM : V_LD);
+        }
+        // dark gap under the skirt, visible where the next tier does not cover it
+        if (i < tiers - 1)
+            for (int x = (int)(40 - hw * 0.85f); x <= (int)(40 + hw * 0.85f); ++x)
+                if (!c.get(x, (int)base + 6)) c.set(x, (int)base + 6, V_TD);
     }
     c.outline(V_OUT);
     s.worldW = 1150; s.hitW = 0.2f;
@@ -526,26 +556,64 @@ static void make_lighthouse() {
     s.emissive = 1 << 8;
 }
 
-// ice spires: 1 outline 2 shade 3 mid 4 light 5 glint 6 deep
+// ice formation: faceted chunks of glacier ice
+// 1 outline 2 shade 3 mid 4 light 5 snow / glint 6 crevasse
+static void ice_chunk(Canvas& c, Rng& r, float cx, float base, float w, float h, float lean) {
+    float hw = w / 2;
+    float tx = cx + lean + (r.f() - 0.5f) * w * 0.2f, ty = base - h;
+    float body[] = { cx - hw, base,
+                     cx - hw + lean * 0.2f - 2, base - h * 0.45f,
+                     cx - w * 0.28f + lean * 0.5f, base - h * 0.8f,
+                     tx, ty,
+                     cx + w * 0.30f + lean * 0.6f, base - h * 0.72f,
+                     cx + hw - 1 + lean * 0.2f, base - h * 0.35f,
+                     cx + hw, base };
+    c.poly(body, 7, 3);
+    float mx = cx + lean * 0.5f - w * 0.05f, my = base - h * 0.45f, bx = cx - w * 0.08f;
+    float lit[] = { cx - hw, base, body[2], body[3], body[4], body[5], tx, ty, mx, my, bx, base };
+    c.poly(lit, 6, 4);
+    float shd[] = { tx, ty, body[8], body[9], body[10], body[11], cx + hw, base, bx, base, mx, my };
+    c.poly(shd, 6, 2);
+    // snowy top, ragged lower edge
+    for (int y = (int)ty; y < (int)(ty + h * 0.24f); ++y)
+        for (int x = (int)(cx - hw - 4); x <= (int)(cx + hw + 4 + fabsf(lean)); ++x) {
+            uint8_t v = c.get(x, y);
+            if (!v || v == SHADOW) continue;
+            {   // only this chunk's own pixels (not the blocks behind it)
+                bool in = false;
+                for (int k = 0, j = 6; k < 7; j = k++) {
+                    float xi = body[2 * k], yi = body[2 * k + 1], xj = body[2 * j], yj = body[2 * j + 1];
+                    if (((yi > y + 0.5f) != (yj > y + 0.5f)) && (x + 0.5f < (xj - xi) * (y + 0.5f - yi) / (yj - yi) + xi)) in = !in;
+                }
+                if (!in) continue;
+            }
+            float lim = h * 0.14f + 5.0f * fabsf(sinf(x * 0.9f + cx)) + r.f() * 2.0f;
+            if (y - ty < lim) c.set(x, y, v == 2 ? 4 : 5);
+        }
+    // ridge, fine ice veins and crevasses
+    c.thick(tx, ty + 6, mx, my, 0.45f, 5);
+    for (int k = 0; k < 4; ++k) {
+        float y0 = my - h * 0.2f + k * h * 0.17f;
+        c.thick(mx + 2, y0, mx + w * 0.34f, y0 + h * 0.07f, 0.4f, 3);
+    }
+    c.thick(cx - w * 0.16f, base - h * 0.55f, cx - w * 0.22f + (r.f() - 0.5f) * 4, base - h * 0.15f, 0.55f, 6);
+    c.thick(cx + w * 0.18f, base - h * 0.5f, cx + w * 0.12f, base - h * 0.2f, 0.5f, 6);
+    // snow banked at the foot
+    c.ellipse(cx - w * 0.1f, base, w * 0.55f, 3.2f, 5);
+    c.ellipse(cx + w * 0.2f, base + 1, w * 0.32f, 2.4f, 4);
+}
+
 static void make_ice() {
     Sprite& s = g_sprites[SPR_ICE];
-    Canvas c(s, 96, 140);
-    c.ellipse(48, 136, 40, 4, SHADOW);
-    struct Sp { float cx, h, w; } sp[] = { { 24, 74, 22 }, { 76, 90, 24 }, { 90, 46, 14 }, { 48, 122, 30 } };
-    for (auto& q : sp) {
-        float b = 136, hw = q.w / 2, sh = b - q.h * 0.68f, tip = b - q.h;
-        float all[] = { q.cx - hw, b, q.cx - hw, sh, q.cx, tip, q.cx + hw, sh, q.cx + hw, b };
-        c.poly(all, 5, 3);
-        float left[] = { q.cx - hw, b, q.cx - hw, sh, q.cx, tip, q.cx - hw * 0.15f, sh + 8, q.cx - hw * 0.2f, b };
-        c.poly(left, 5, 4);
-        float right[] = { q.cx + hw * 0.35f, b, q.cx + hw * 0.1f, sh + 6, q.cx, tip, q.cx + hw, sh, q.cx + hw, b };
-        c.poly(right, 5, 2);
-        c.thick(q.cx - hw * 0.55f, b - 6, q.cx - hw * 0.55f, sh + 4, 0.7f, 5);
-        c.thick(q.cx, tip + 4, q.cx - hw * 0.1f, tip + 16, 0.8f, 5);
-        c.thick(q.cx + hw * 0.5f, b - 10, q.cx + hw * 0.5f, sh + 14, 0.6f, 6);
-    }
+    Canvas c(s, 112, 124);
+    Rng r(515);
+    c.ellipse(56, 119, 50, 4, SHADOW);
+    ice_chunk(c, r, 40, 112, 46, 100, -7);    // tall leaning slab, back left
+    ice_chunk(c, r, 80, 112, 46, 74, 5);      // right
+    ice_chunk(c, r, 14, 113, 26, 40, -2);     // small left
+    ice_chunk(c, r, 58, 116, 42, 44, 3);      // low front block
     c.outline(V_OUT);
-    s.worldW = 1300; s.hitW = 0.6f;
+    s.worldW = 1500; s.hitW = 0.6f;
 }
 
 // snowman: 1 outline 2 snow shade 3 snow 4 snow light 5 carrot 6 scarf 7 coal 8 stick
@@ -753,7 +821,7 @@ static void build_palettes() {
     for (int t = 3; t < 6; ++t) {
         set_pal(SPR_PARASOL, t, { 0, O, rgb(214, 214, 222), rgb(150, 150, 160), 0, rgb(238, 60, 60), rgb(252, 252, 252), rgb(196, 36, 48) });
         set_pal(SPR_LIGHTHOUSE, t, { 0, O, rgb(196, 204, 216), rgb(248, 248, 252), rgb(214, 40, 48), rgb(146, 24, 34), rgb(62, 66, 80), rgb(150, 222, 255), rgb(255, 244, 170) });
-        set_pal(SPR_ICE, t, { 0, O, rgb(70, 112, 172), rgb(112, 172, 226), rgb(172, 224, 252), rgb(238, 252, 255), rgb(44, 76, 140) });
+        set_pal(SPR_ICE, t, { 0, rgb(34, 58, 104), rgb(92, 140, 192), rgb(140, 196, 230), rgb(196, 232, 250), rgb(246, 251, 255), rgb(52, 92, 150) });
         set_pal(SPR_SNOWMAN, t, { 0, O, rgb(184, 202, 230), rgb(240, 246, 255), rgb(255, 255, 255), rgb(255, 130, 30), rgb(220, 40, 50), rgb(30, 30, 40), rgb(110, 76, 50) });
         set_pal(SPR_CONTAINER, t, { 0, O, 0, rgb(196, 56, 46), rgb(132, 36, 34), rgb(46, 100, 174), rgb(28, 64, 122), rgb(224, 156, 44), rgb(152, 100, 26), rgb(52, 144, 100), rgb(32, 94, 66) });
         set_pal(SPR_CONTAINER2, t, { 0, O, 0, rgb(196, 56, 46), rgb(132, 36, 34), rgb(46, 100, 174), rgb(28, 64, 122), rgb(224, 156, 44), rgb(152, 100, 26), rgb(52, 144, 100), rgb(32, 94, 66) });
