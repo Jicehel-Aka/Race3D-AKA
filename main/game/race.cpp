@@ -73,6 +73,7 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
     nitro = 1.0f; nitroOn = false; steer = 0;
     skyOffset = nearOffset = 0; shake = 0; offroad = skid = 0;
     gear = 1; rpm = 0;
+    damage = 0; perf = 1; sputter = 0; sputterNext = 2; damageCool = 0; smokeT = 0; spinT = 0;
     const DiffProfile& d = kDiff[diff];
 
     // AI drivers: random strengths, strongest on pole
@@ -112,6 +113,7 @@ void Race::update(float dt, const plat::Input& in) {
     if (shake > 0) shake -= dt;
     if (spinT > 0) spinT -= dt;
     if (smokeT > 0) smokeT -= dt;
+    if (damageCool > 0) damageCool -= dt;
 
     Car& p = player();
     float oldDist = p.dist;
@@ -180,8 +182,24 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     p.x += dx * steer;
     p.x -= dx * pct * seg.curve * CENTRIFUGAL;
 
-    float maxS = MAX_SPEED * (nitroOn ? NITRO_BOOST : 1.0f);
-    if (gas) p.speed += ACCEL * dt * (nitroOn ? 1.9f : 1.0f) * (1.0f - 0.55f * pct * pct);
+    // engine damage: weaker engine, lower top speed, pull to one side, stalling, then death
+    float dm = clampf((damage - 0.25f) / 0.75f, 0.0f, 1.0f);
+    perf = 1.0f - 0.55f * dm * (0.4f + 0.6f * dm);
+    if (p.retired) { gas = false; nitroOn = false; }
+    if (damage > 0.6f && !p.retired) {
+        sputterNext -= dt;
+        if (sputter > 0) sputter -= dt;
+        else if (sputterNext <= 0) {
+            sputter = 0.12f + 0.25f * frand();
+            sputterNext = (2.6f - 2.0f * clampf((damage - 0.6f) / 0.4f, 0, 1)) * (0.6f + 0.8f * frand());
+            shake = fmaxf(shake, 0.12f);
+        }
+        if (sputter > 0) { gas = false; nitroOn = false; }
+    } else sputter = 0;
+    if (damage > 0.5f && p.speed > MAX_SPEED * 0.1f) p.x += pullDir * (damage - 0.5f) * 0.55f * pct * dt;
+    if (nitroOn && damage > 0.8f) nitroOn = false;
+    float maxS = MAX_SPEED * perf * (nitroOn ? NITRO_BOOST : 1.0f);
+    if (gas) p.speed += ACCEL * dt * (nitroOn ? 1.9f : 1.0f) * (1.0f - 0.55f * pct * pct) * (0.3f + 0.7f * perf);
     else if (brake) p.speed -= BRAKING * dt;
     else p.speed -= DECEL * dt;
     if (gas && brake) p.speed -= BRAKING * dt * 0.5f;
@@ -189,7 +207,8 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     float ax = fabsf(p.x);
     offroad = ax > 1.12f ? 1.0f : (ax > 1.0f ? 0.35f : 0.0f);
     if (ax > 1.12f && p.speed > OFFROAD_LIMIT) p.speed -= OFFROAD_DECEL * dt;
-    if (p.speed > maxS) p.speed -= MAX_SPEED * 0.4f * dt;   // bleed off after nitro
+    if (p.retired) p.speed -= MAX_SPEED * 0.35f * dt;          // dead engine: coast down
+    if (p.speed > maxS) p.speed -= MAX_SPEED * (damage > 0.25f ? 0.25f : 0.4f) * dt;   // bleed off after nitro / damage
     if (p.speed < 0) p.speed = 0;
     p.x = clampf(p.x, -2.6f, 2.6f);
 
@@ -266,6 +285,12 @@ void Race::driveAI(Car& c, float dt, float& top) {
 }
 
 void Race::updateAI(Car& c, float dt) {
+    if (c.retired) {   // the player's car after engine failure
+        c.speed = fmaxf(0.0f, c.speed - MAX_SPEED * 0.35f * dt);
+        c.dist += c.speed * dt;
+        c.braking = true;
+        return;
+    }
     if (!started || raceTime < c.launchDelay) { c.speed = 0; c.braking = true; return; }
     float top;
     driveAI(c, dt, top);
@@ -281,6 +306,15 @@ void Race::updateAI(Car& c, float dt) {
     }
     if (fabsf(c.x) > 1.1f && c.speed > OFFROAD_LIMIT) c.speed -= OFFROAD_DECEL * dt;
     c.dist += c.speed * dt;
+}
+
+void Race::addDamage(float d) {
+    if (autopilot || demo || d <= 0) return;
+    static const float kDiffScale[DIFF_COUNT] = { 0.7f, 1.0f, 1.15f, 1.3f };
+    float before = damage;
+    if (before <= 0 && d > 0) pullDir = frand() < 0.5f ? -1 : 1;
+    damage = clampf(damage + d * kDiffScale[difficulty], 0.0f, 1.0f);
+    if (damage >= 1.0f && !player().retired) { player().retired = true; ev.retired = true; }
 }
 
 static HitKind hit_kind(int spr) {
@@ -339,6 +373,10 @@ void Race::collisions(float dt) {
                         p.x += (p.x > 0 ? -1.0f : 1.0f) * push;
                         spinT = kind == HIT_SOFT ? 0.0f : 0.55f;
                         spinDir = p.x > 0 ? 1 : -1;     // the car yaws away from the obstacle
+                        {
+                            static const float kDmg[] = { 0, 0.01f, 0.09f, 0.17f, 0.12f, 0.09f, 0.26f };
+                            addDamage(kDmg[kind] * (0.35f + 0.65f * power * power));
+                        }
                         if (kind == HIT_METAL || kind == HIT_ROCK || kind == HIT_HEAVY) smokeT = 0.8f + 1.6f * power;
                     } else if (kind != HIT_SOFT && p.speed > cap) p.speed = cap;
                 }
@@ -377,6 +415,10 @@ void Race::collisions(float dt) {
                     ev.hitColor = other.livery.body;
                     shake = fmaxf(shake, glancing ? 0.18f : 0.3f);
                     if (!glancing) { spinT = 0.35f; spinDir = ev.hitSide > 0 ? -1 : 1; }
+                    if (damageCool <= 0) {
+                        damageCool = 0.5f;
+                        addDamage((glancing ? 0.015f : (back.isPlayer ? 0.06f : 0.035f)) * power);
+                    }
                 }
             } else if (involvesPlayer && lat > 0.35f && gap < SEG_LEN * 0.55f && sideCooldown <= 0) {
                 // alongside: paint rubbing
@@ -430,7 +472,7 @@ void Race::estimateUnfinished() {
         if (c.finished) continue;
         float remain = laps * track.length - c.dist;
         float v = fmaxf(c.speed, MAX_SPEED * 0.6f);
-        c.finishTime = raceTime + remain / v;
+        c.finishTime = c.retired ? raceTime + 99999.0f : raceTime + remain / v;
         c.finished = true;
     }
     ranking();

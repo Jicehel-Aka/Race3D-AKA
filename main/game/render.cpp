@@ -861,6 +861,21 @@ void fx_update(const Race& r, float dt) {
         float k = r.smokeT > 1.0f ? 1.0f : r.smokeT;
         spawn(W / 2 + (prand() - 0.5f) * 40, (float)py + 22, (prand() - 0.5f) * 14, -30 - prand() * 20, 0.8f + 0.5f * k, lerp(rgb(60, 60, 66), rgb(170, 170, 176), (int)(prand() * 160)), 4, 3, -6.0f, 6.0f);
     }
+    if (r.damage > 0.3f) {                         // permanent damage: smoke, then black smoke, then flames
+        float d = r.damage;
+        float rate = (d - 0.3f) * 1.1f + (r.sputter > 0 ? 0.3f : 0.0f);
+        if (prand() < rate) {
+            int g = d > 0.7f ? 40 : 90;
+            uint16_t c = lerp(rgb(d > 0.7f ? 22 : 70, d > 0.7f ? 22 : 70, d > 0.7f ? 24 : 76), rgb(150, 150, 156), (int)(prand() * (d > 0.7f ? 70 : 150)) + g - 40);
+            spawn(W / 2 + (prand() - 0.5f) * 36, (float)py + 24, (prand() - 0.5f) * 16, -34 - prand() * 22, 0.7f + 0.5f * d, c, 4, 3, -6.0f, 6.0f);
+        }
+        if (d > 0.82f && prand() < (d - 0.8f) * 4.0f) {
+            uint16_t c = prand() < 0.5f ? rgb(255, 150, 40) : rgb(255, 70, 20);
+            spawn(W / 2 + (prand() - 0.5f) * 30, (float)py + 26, (prand() - 0.5f) * 26, -45 - prand() * 40, 0.35f, c, 1);
+        }
+        if (r.player().retired && prand() < 0.5f)
+            spawn(W / 2 + (prand() - 0.5f) * 40, (float)py + 22, (prand() - 0.5f) * 10, -26 - prand() * 18, 1.2f, rgb(40, 40, 44), 4, 4, -6.0f, 8.0f);
+    }
     if (s_flash > 0) s_flash -= dt * 2.6f;
     for (int i = 0; i < s_pn;) {
         Particle& p = s_p[i];
@@ -1027,4 +1042,21 @@ void render_hud(const Race& r, float time) {
     }
     rect(gx - 2, gy - 2, 10, gh + 4, rgb(200, 220, 255));
     text(gx - 9, gy - 12, "N2O", r.nitro > 0.99f ? rgb(120, 255, 255) : rgb(150, 170, 200));
+
+    // engine health gauge (full when mint, empties as damage grows)
+    {
+        const int hx = 221;
+        blendRect(hx - 2, gy - 2, 10, gh + 4, rgb(0, 0, 0), 150);
+        float hp = 1.0f - r.damage;
+        int hf = (int)(hp * gh);
+        bool blink = r.damage > 0.8f && ((int)(time * 6) & 1);
+        for (int y = 0; y < hf; ++y) {
+            uint16_t c = hp > 0.5f ? lerp(rgb(240, 220, 60), rgb(90, 230, 90), (int)((hp - 0.5f) * 512))
+                                   : lerp(rgb(255, 50, 30), rgb(240, 220, 60), (int)(hp * 512));
+            if (blink) c = rgb(255, 255, 255);
+            hline(hx, hx + 6, gy + gh - 1 - y, c);
+        }
+        rect(hx - 2, gy - 2, 10, gh + 4, blink ? rgb(255, 80, 60) : rgb(200, 220, 255));
+        text(hx - 4, gy - 22, "ENG", r.damage > 0.5f ? rgb(255, 140, 90) : rgb(150, 170, 200));
+    }
 }

@@ -112,11 +112,11 @@ void start_race() {
 void finish_race() {
     g_race.estimateUnfinished();
     const Car& p = g_race.player();
-    if (p.bestLap > 0 && (g_rec.bestLap[g_track] == 0 || p.bestLap < g_rec.bestLap[g_track])) {
+    if (!p.retired && p.bestLap > 0 && (g_rec.bestLap[g_track] == 0 || p.bestLap < g_rec.bestLap[g_track])) {
         g_rec.bestLap[g_track] = p.bestLap; g_newLapRecord = true;
     }
     float& br = g_rec.bestRace[g_track][g_diff];
-    if (g_race.laps == 3 && (br == 0 || p.finishTime < br)) { br = p.finishTime; g_newRaceRecord = true; }
+    if (!p.retired && g_race.laps == 3 && (br == 0 || p.finishTime < br)) { br = p.finishTime; g_newRaceRecord = true; }
     uint8_t& bp = g_rec.bestPlace[g_track][g_diff];
     if (bp == 0 || p.place < bp) bp = (uint8_t)p.place;
     plat::saveBlob(&g_rec, sizeof g_rec);
@@ -268,7 +268,8 @@ void draw_results() {
         fillRect(44, y, 12, 8, c.livery.body);
         rect(44, y, 12, 8, c.livery.stripe);
         textOutline(62, y, c.name, c.isPlayer ? rgb(255, 240, 120) : rgb(255, 255, 255), rgb(0, 0, 0));
-        if (i == 0) format_time(t, c.finishTime);
+        if (c.retired) snprintf(t, sizeof t, "DNF");
+        else if (i == 0) format_time(t, c.finishTime);
         else { float gap = c.finishTime - winner; snprintf(t, sizeof t, "+%d.%02d", (int)gap, (int)(gap * 100) % 100); }
         textOutline(170, y, t, rgb(255, 255, 255), rgb(0, 0, 0));
         if (c.bestLap > 0) { format_time(t, c.bestLap); textOutline(244, y, t, rgb(200, 220, 255), rgb(0, 0, 0)); }
@@ -276,7 +277,8 @@ void draw_results() {
     const Car& p = g_race.player();
     char buf[40];
     static const char* const ord[] = { "", "1ST", "2ND", "3RD", "4TH", "5TH", "6TH", "7TH", "8TH" };
-    snprintf(buf, sizeof buf, "YOU FINISHED %s", ord[p.place]);
+    if (p.retired) snprintf(buf, sizeof buf, "ENGINE FAILURE");
+    else snprintf(buf, sizeof buf, "YOU FINISHED %s", ord[p.place]);
     textCentered(W / 2, 198, buf, p.place == 1 ? rgb(255, 230, 60) : rgb(255, 255, 255), rgb(0, 0, 0), 2);
     if ((g_newLapRecord || g_newRaceRecord) && ((int)(g_time * 3) & 1))
         textCentered(W / 2, 216, g_newRaceRecord ? "NEW RACE RECORD!" : "NEW LAP RECORD!", rgb(120, 255, 160), rgb(0, 0, 0));
@@ -288,7 +290,12 @@ void audio_update() {
     bool active = !g_paused && (g_state == ST_COUNTDOWN || g_state == ST_RACING || g_state == ST_FINISHED);
     float vol = active ? 0.55f : 0.0f;
     if (g_state == ST_FINISHED) vol *= fmaxf(0.0f, 1.0f - g_stateT / 5.0f);
-    plat::setEngine(r.rpm, r.nitroOn ? 1.0f : 0.6f, vol);
+    // damaged engine: rough, weaker, cutting out; dead engine: silent
+    float dmg = r.damage;
+    if (r.player().retired) vol *= 0.0f;
+    else if (r.sputter > 0) vol *= 0.15f;
+    else if (dmg > 0.4f) vol *= 1.0f - 0.35f * ((int)(g_time * 23) % 3 == 0 ? 1.0f : 0.0f) * (dmg - 0.4f) / 0.6f;
+    plat::setEngine(r.rpm * (1.0f - 0.25f * dmg), r.nitroOn ? 1.0f : 0.6f * (1.0f - 0.4f * dmg), vol);
     plat::setNoise(active ? r.offroad : 0, active ? r.skid : 0);
 }
 
@@ -305,6 +312,20 @@ void handle_events() {
     } else if (e.bump) {
         plat::playSfx(plat::SFX_BUMP);
         fx_burst(W / 2, H - 70, 10, rgb(255, 230, 120), 110, 0.4f);
+    }
+    {   // engine damage warnings
+        static float lastD = 0;
+        float d = g_race.damage;
+        if (d < lastD) lastD = d;
+        if (lastD < 0.5f && d >= 0.5f) message("ENGINE DAMAGED", rgb(255, 210, 90), rgb(190, 90, 10), 2.0f);
+        else if (lastD < 0.8f && d >= 0.8f) message("ENGINE FAILING!", rgb(255, 120, 90), rgb(190, 20, 10), 2.2f);
+        lastD = d;
+    }
+    if (e.retired) {
+        plat::playSfx(plat::SFX_HIT_HEAVY);
+        message("ENGINE DEAD", rgb(255, 90, 70), rgb(120, 10, 10), 4.0f);
+        g_state = ST_FINISHED; g_stateT = 0;
+        g_race.autopilot = true;
     }
     if (e.finished) {
         plat::playSfx(plat::SFX_FINISH);

@@ -33,6 +33,7 @@ struct Car {
     bool finished = false;
     float finishTime = 0;
     int place = 0;
+    bool retired = false;  // engine dead: the car coasts to a stop and is out of the race
 };
 
 // what the player hit: drives the particles, the sound and the physics of the impact
@@ -49,7 +50,7 @@ enum HitKind : uint8_t {
 };
 
 struct RaceEvents {     // things the renderer / game wants to react to this frame
-    bool crash = false, bump = false, lap = false, bestLap = false, finalLap = false, finished = false;
+    bool retired = false, crash = false, bump = false, lap = false, bestLap = false, finalLap = false, finished = false;
     uint8_t hit = HIT_NONE;     // set together with crash / bump
     int8_t hitSide = 0;         // -1 / +1 : side of the player where the contact happened
     uint8_t hitSpr = 0;         // sprite id of the obstacle (scenery hits)
@@ -76,6 +77,15 @@ public:
     float shake = 0;
     float spinT = 0; int spinDir = 0;     // brief yaw of the player's car after an impact
     float smokeT = 0;                      // damage smoke after a hard hit
+    // engine damage: 0 = mint, 1 = dead. Grows with every impact; past ~0.25 the car loses power and top speed,
+    // past ~0.5 it pulls to one side, past ~0.6 the engine cuts out now and then, at 1 it stops for good.
+    float damage = 0;
+    float perf = 1;                        // power factor derived from the damage (1 .. ~0.4)
+    float sputter = 0;                     // > 0 while the engine is cutting out
+    float sputterNext = 2;
+    float damageCool = 0;
+    int   pullDir = 1;
+    void  addDamage(float d);
     float offroad = 0, skid = 0;
     int gear = 1;
     float rpm = 0;
