@@ -214,9 +214,17 @@ static void draw_car_base(Canvas& c) {
     }
 }
 
+#define CAR_USE_MODEL 0
 static void make_car_3q(SpriteId id, int dir);
+static void render_car(SpriteId id, float yaw, float el, bool straight);
 
 static void make_cars() {
+#if CAR_USE_MODEL
+    render_car(SPR_CAR, 0.0f, 0.02f, true);
+    render_car(SPR_CAR_LEFT, 0.17f, 0.03f, false);
+    render_car(SPR_CAR_RIGHT, -0.17f, 0.03f, false);
+    for (int i = SPR_CAR; i <= SPR_CAR_RIGHT; ++i) { g_sprites[i].worldW = i == SPR_CAR ? 700.0f : 700.0f * g_sprites[i].w / CAR_W; g_sprites[i].hitW = 0.95f; }
+#else
     // straight
     {
         Sprite& s = g_sprites[SPR_CAR];
@@ -250,6 +258,7 @@ static void make_cars() {
         g_sprites[i].hitW = 0.95f;
         g_sprites[i].emissive = (1 << C_TAIL) | (1 << C_TAILB);
     }
+#endif
     make_car_3q(SPR_CAR_LEFT3Q, -1);
     make_car_3q(SPR_CAR_RIGHT3Q, +1);
 }
@@ -263,13 +272,13 @@ namespace {
 struct V3 { float x, y, z; };
 enum { MT_BODY = 0, MT_GLASS, MT_TYRE, MT_FLAT };
 enum { PT_NONE = 0, PT_BODY, PT_CABIN, PT_WING, PT_WHEEL, PT_GLASS, PT_RIM };
-struct Tri { V3 p[3]; uint8_t mat, flat, part; float bias; };
-static Tri s_tri[900];
+struct Tri { V3 p[3]; uint8_t mat, flat, part; float bias; bool smooth; V3 n[3]; };
+static Tri s_tri[1400];
 static int s_nt;
 
 static void add_tri(V3 a, V3 b, V3 c, uint8_t mat, uint8_t part, uint8_t flat = 0, float bias = 0) {
-    if (s_nt >= 900) return;
-    s_tri[s_nt++] = { { a, b, c }, mat, flat, part, bias };
+    if (s_nt >= 1400) return;
+    s_tri[s_nt++] = { { a, b, c }, mat, flat, part, bias, false, {} };
 }
 static void add_quad(V3 a, V3 b, V3 c, V3 d, uint8_t mat, uint8_t part, uint8_t flat = 0, float bias = 0) {
     add_tri(a, b, c, mat, part, flat, bias);
@@ -313,48 +322,53 @@ static void add_wheel(float xo, float th, float cy, float cz, float R) {
 static void build_car_model() {
     s_nt = 0;
     // ---- body: lofted octagonal sections        z     hw    ybot  ysh   ytop  tw
-    float B[6][6] = { { 0.00f, 0.93f, 0.20f, 0.48f, 0.62f, 0.80f },
-                                   { 0.45f, 0.96f, 0.17f, 0.51f, 0.64f, 0.82f },
-                                   { 2.10f, 0.95f, 0.15f, 0.50f, 0.61f, 0.78f },
+    float B[6][6] = { { 0.00f, 0.93f, 0.20f, 0.46f, 0.58f, 0.78f },
+                                   { 0.45f, 0.96f, 0.17f, 0.49f, 0.60f, 0.80f },
+                                   { 2.10f, 0.95f, 0.15f, 0.48f, 0.57f, 0.76f },
                                    { 3.30f, 0.89f, 0.15f, 0.42f, 0.52f, 0.68f },
                                    { 4.00f, 0.82f, 0.17f, 0.32f, 0.40f, 0.60f },
                                    { 4.35f, 0.74f, 0.20f, 0.27f, 0.32f, 0.52f } };
     const float ZS = 0.68f;
     for (int k = 0; k < 6; ++k) B[k][0] *= ZS;
-    V3 ring[6][8];
+    const int RN = 12;
+    V3 ring[6][RN];
     for (int k = 0; k < 6; ++k) {
         float z = B[k][0], hw = B[k][1], yb = B[k][2], ys = B[k][3], yt = B[k][4], tw = B[k][5];
-        ring[k][0] = { -hw * 0.88f, yb, z }; ring[k][1] = { -hw, yb + 0.06f, z }; ring[k][2] = { -hw, ys, z };
-        ring[k][3] = { -tw, yt, z };         ring[k][4] = { tw, yt, z };          ring[k][5] = { hw, ys, z };
-        ring[k][6] = { hw, yb + 0.06f, z };  ring[k][7] = { hw * 0.88f, yb, z };
+        float sx = tw + (hw - tw) * 0.40f, sy = yt - (yt - ys) * 0.22f;           // rounded shoulder
+        V3 L[6] = { { -hw * 0.86f, yb, z }, { -hw, yb + 0.06f, z }, { -hw, ys - 0.05f, z }, { -hw * 0.995f, ys, z }, { -sx, sy, z }, { -tw, yt, z } };
+        for (int e = 0; e < 6; ++e) { ring[k][e] = L[e]; ring[k][RN - 1 - e] = { -L[e].x, L[e].y, L[e].z }; }
     }
+    auto body_start = s_nt;
     for (int k = 0; k < 5; ++k)
-        for (int e = 0; e < 8; ++e) {
-            int n = (e + 1) % 8;
+        for (int e = 0; e < RN; ++e) {
+            int n = (e + 1) % RN;
             add_quad(ring[k][e], ring[k][n], ring[k + 1][n], ring[k + 1][e], MT_BODY, PT_BODY);
         }
+    for (int t = body_start; t < s_nt; ++t) s_tri[t].smooth = true;
     for (int k : { 0, 5 }) {                       // end caps
-        V3 c = { 0, 0.42f, B[k][0] };
-        for (int e = 0; e < 8; ++e) add_tri(c, ring[k][e], ring[k][(e + 1) % 8], MT_BODY, PT_BODY);
+        V3 c = { 0, 0.40f, B[k][0] };
+        for (int e = 0; e < RN; ++e) add_tri(c, ring[k][e], ring[k][(e + 1) % RN], MT_BODY, PT_BODY);
     }
     // ---- cabin: trapezoid sections             z     hwb    hwt   ybase  ytop
-    float K[6][5] = { { 0.85f, 0.66f, 0.58f, 0.62f, 0.64f },
-                                   { 1.20f, 0.67f, 0.58f, 0.63f, 0.86f },
-                                   { 2.05f, 0.67f, 0.56f, 0.62f, 0.88f },
-                                   { 2.60f, 0.67f, 0.58f, 0.60f, 0.83f },
-                                   { 3.05f, 0.66f, 0.60f, 0.56f, 0.64f },
-                                   { 3.20f, 0.64f, 0.60f, 0.54f, 0.55f } };
-    for (int k = 0; k < 6; ++k) { K[k][0] *= ZS; if (K[k][4] > 0.8f) K[k][4] += 0.05f; }
+    float K[6][5] = { { 0.85f, 0.72f, 0.64f, 0.58f, 0.60f },
+                                   { 1.20f, 0.74f, 0.64f, 0.59f, 0.97f },
+                                   { 2.05f, 0.74f, 0.62f, 0.58f, 1.00f },
+                                   { 2.60f, 0.72f, 0.62f, 0.56f, 0.92f },
+                                   { 3.05f, 0.70f, 0.64f, 0.52f, 0.60f },
+                                   { 3.20f, 0.66f, 0.62f, 0.50f, 0.51f } };
+    for (int k = 0; k < 6; ++k) { K[k][0] *= ZS; }
     V3 cr[6][4];
     for (int k = 0; k < 6; ++k) {
         cr[k][0] = { -K[k][1], K[k][3], K[k][0] }; cr[k][1] = { -K[k][2], K[k][4], K[k][0] };
         cr[k][2] = { K[k][2], K[k][4], K[k][0] };  cr[k][3] = { K[k][1], K[k][3], K[k][0] };
     }
+    int cab_start = s_nt;
     for (int k = 0; k < 5; ++k)
         for (int e = 0; e < 3; ++e) {
-            bool glassTop = (e == 1 && (k == 0 || k == 4));     // rear glass and windscreen
+            bool glassTop = (e == 1 && k == 4);     // rear glass and windscreen
             add_quad(cr[k][e], cr[k][e + 1], cr[k + 1][e + 1], cr[k + 1][e], glassTop ? MT_GLASS : MT_BODY, glassTop ? PT_GLASS : PT_CABIN);
         }
+    for (int t = cab_start; t < s_nt; ++t) s_tri[t].smooth = true;
     // pillars around the glass are the body colour: draw the glass inset by shrinking it towards the centre
     // (rear glass inset decal)
     {
@@ -424,29 +438,61 @@ static void build_car_model() {
         add_quad({ -0.16f + k * 0.07f, 0.23f, zr - 0.006f }, { -0.115f + k * 0.07f, 0.23f, zr - 0.006f },
                  { -0.115f + k * 0.07f, 0.28f, zr - 0.006f }, { -0.16f + k * 0.07f, 0.28f, zr - 0.006f }, MT_FLAT, PT_BODY, C_OUT, -0.013f);
     // ---- wing: plate, end plates, uprights
-    add_box(-1.02f, 1.02f, 0.70f, 0.755f, 0.06f, 0.42f, MT_BODY, PT_WING);
-    add_box(-1.04f, -1.00f, 0.60f, 0.82f, 0.04f, 0.46f, MT_BODY, PT_WING);
-    add_box(1.00f, 1.04f, 0.60f, 0.82f, 0.04f, 0.46f, MT_BODY, PT_WING);
-    add_box(-0.52f, -0.44f, 0.62f, 0.70f, 0.18f, 0.28f, MT_BODY, PT_WING);
-    add_box(0.44f, 0.52f, 0.62f, 0.70f, 0.18f, 0.28f, MT_BODY, PT_WING);
+    add_box(-1.02f, 1.02f, 0.66f, 0.715f, 0.06f, 0.42f, MT_BODY, PT_WING);
+    add_box(-1.04f, -1.00f, 0.56f, 0.78f, 0.04f, 0.46f, MT_BODY, PT_WING);
+    add_box(1.00f, 1.04f, 0.56f, 0.78f, 0.04f, 0.46f, MT_BODY, PT_WING);
+    add_box(-0.52f, -0.44f, 0.58f, 0.66f, 0.18f, 0.28f, MT_BODY, PT_WING);
+    add_box(0.44f, 0.52f, 0.58f, 0.66f, 0.18f, 0.28f, MT_BODY, PT_WING);
     // ---- wheels
     for (int sd = -1; sd <= 1; sd += 2) {
         add_wheel(sd * 0.99f, 0.32f, 0.20f, 0.36f, 0.20f);
         add_wheel(sd * 0.90f, 0.28f, 0.185f, 3.55f * ZS, 0.185f);
     }
+    // smooth normals: average the (outward) face normals of the lofted shells at each shared vertex
+    struct Acc { int x, y, z; V3 n; };
+    static Acc acc[1400 * 3];
+    int na = 0;
+    auto key = [](V3 p, int& kx, int& ky, int& kz) { kx = (int)lroundf(p.x * 500); ky = (int)lroundf(p.y * 500); kz = (int)lroundf(p.z * 500); };
+    for (int pass = 0; pass < 2; ++pass)
+        for (int t = 0; t < s_nt; ++t) {
+            Tri& T = s_tri[t];
+            if (!T.smooth) continue;
+            V3 u = { T.p[1].x - T.p[0].x, T.p[1].y - T.p[0].y, T.p[1].z - T.p[0].z }, v = { T.p[2].x - T.p[0].x, T.p[2].y - T.p[0].y, T.p[2].z - T.p[0].z };
+            V3 n = { u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x };
+            float nl = sqrtf(n.x * n.x + n.y * n.y + n.z * n.z);
+            if (nl < 1e-9f) continue;
+            n = { n.x / nl, n.y / nl, n.z / nl };
+            V3 c = { (T.p[0].x + T.p[1].x + T.p[2].x) / 3, (T.p[0].y + T.p[1].y + T.p[2].y) / 3, (T.p[0].z + T.p[1].z + T.p[2].z) / 3 };
+            V3 ctr = T.part == PT_CABIN || T.part == PT_GLASS ? V3{ 0, 0.55f, c.z } : V3{ 0, 0.30f, c.z };      // push away from the axis
+            if (n.x * (c.x - ctr.x) + n.y * (c.y - ctr.y) < 0) n = { -n.x, -n.y, -n.z };
+            for (int k = 0; k < 3; ++k) {
+                int kx, ky, kz; key(T.p[k], kx, ky, kz);
+                if (pass == 0) {
+                    int f = -1;
+                    for (int a = 0; a < na; ++a) if (acc[a].x == kx && acc[a].y == ky && acc[a].z == kz) { f = a; break; }
+                    if (f < 0) { f = na++; acc[f] = { kx, ky, kz, { 0, 0, 0 } }; }
+                    acc[f].n = { acc[f].n.x + n.x, acc[f].n.y + n.y, acc[f].n.z + n.z };
+                } else {
+                    for (int a = 0; a < na; ++a) if (acc[a].x == kx && acc[a].y == ky && acc[a].z == kz) {
+                        float l = sqrtf(acc[a].n.x * acc[a].n.x + acc[a].n.y * acc[a].n.y + acc[a].n.z * acc[a].n.z) + 1e-9f;
+                        T.n[k] = { acc[a].n.x / l, acc[a].n.y / l, acc[a].n.z / l };
+                        break;
+                    }
+                }
+            }
+        }
 }
 
 // rasterised result of one view
 struct Shot { int w, h; float ax, lightL, lightR; };
 } // namespace
 
-static void make_car_3q(SpriteId id, int dir) {
+static void render_car(SpriteId id, float yaw, float el, bool straight) {
     Sprite& s = g_sprites[id];
     build_car_model();
-    const float yaw = (dir < 0 ? 1.0f : -1.0f) * 0.40f;      // nose to the left for a left turn
     const float ca = cosf(yaw), sa = sinf(yaw);
-    const float el = 0.07f, ce = cosf(el), se = sinf(el);
-    const float D = 15.0f, F = 56.0f * D;
+    const float ce = cosf(el), se = sinf(el);
+    const float D = 15.0f, F = 50.0f * D;
     struct P2 { float x, y, z; };
     auto proj = [&](V3 p, P2& o, V3* world = nullptr) {
         float x = p.x * ca - p.z * sa, z = p.x * sa + p.z * ca, y = p.y;
@@ -454,48 +500,57 @@ static void make_car_3q(SpriteId id, int dir) {
         float zc = z * ce - y * se + D;
         o = { F * x / zc, -F * (y * ce + z * se) / zc, zc };
     };
-    // bounding box
     float mnx = 1e9f, mxx = -1e9f;
     for (int t = 0; t < s_nt; ++t) for (int k = 0; k < 3; ++k) { P2 o; proj(s_tri[t].p[k], o); mnx = fminf(mnx, o.x); mxx = fmaxf(mxx, o.x); }
     P2 ground; proj({ 0, 0, 0 }, ground);
-    const int CW = (int)ceilf(mxx - mnx) + 6;
-    const float ox = 3.0f - mnx, oy = 51.0f - ground.y;
+    const int CW = straight ? CAR_W : (int)ceilf(mxx - mnx) + 6;
+    const float ox = straight ? CW * 0.5f : 3.0f - mnx, oy = 51.0f - ground.y;
     Canvas c(s, CW, CAR_H);
     const int H = CAR_H;
     float* zb = (float*)plat::allocLarge(CW * H * sizeof(float));
     uint8_t* part = (uint8_t*)plat::allocLarge(CW * H);
     uint8_t* col = (uint8_t*)plat::allocLarge(CW * H);
     for (int i = 0; i < CW * H; ++i) { zb[i] = 1e9f; part[i] = 0; col[i] = 0; }
-    // lighting
-    float Lx = -0.30f, Ly = 0.78f, Lz = -0.50f; { float l = sqrtf(Lx * Lx + Ly * Ly + Lz * Lz); Lx /= l; Ly /= l; Lz /= l; }
+    float Lx = -0.34f, Ly = 0.62f, Lz = -0.55f; { float l = sqrtf(Lx * Lx + Ly * Ly + Lz * Lz); Lx /= l; Ly /= l; Lz /= l; }
+    // half vector for the highlight (viewer straight behind the car)
+    float Hx = Lx, Hy = Ly, Hz = Lz - 1.0f; { float l = sqrtf(Hx * Hx + Hy * Hy + Hz * Hz); Hx /= l; Hy /= l; Hz /= l; }
     static const float bay[4] = { 0.0f, 0.5f, 0.75f, 0.25f };
 
     for (int t = 0; t < s_nt; ++t) {
         const Tri& T = s_tri[t];
         P2 q[3]; V3 w[3];
         for (int k = 0; k < 3; ++k) proj(T.p[k], q[k], &w[k]);
-        // face normal (world), oriented towards the camera
         V3 u = { w[1].x - w[0].x, w[1].y - w[0].y, w[1].z - w[0].z }, v = { w[2].x - w[0].x, w[2].y - w[0].y, w[2].z - w[0].z };
-        V3 n = { u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x };
-        float nl = sqrtf(n.x * n.x + n.y * n.y + n.z * n.z);
+        V3 fn = { u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x };
+        float nl = sqrtf(fn.x * fn.x + fn.y * fn.y + fn.z * fn.z);
         if (nl < 1e-9f) continue;
-        n = { n.x / nl, n.y / nl, n.z / nl };
+        fn = { fn.x / nl, fn.y / nl, fn.z / nl };
         V3 cen = { (w[0].x + w[1].x + w[2].x) / 3, (w[0].y + w[1].y + w[2].y) / 3, (w[0].z + w[1].z + w[2].z) / 3 };
         V3 toCam = { -cen.x, 1.6f - cen.y, -D - cen.z };
-        if (n.x * toCam.x + n.y * toCam.y + n.z * toCam.z < 0) n = { -n.x, -n.y, -n.z };
-        float d = fmaxf(0.0f, n.x * Lx + n.y * Ly + n.z * Lz);
+        if (fn.x * toCam.x + fn.y * toCam.y + fn.z * toCam.z < 0) fn = { -fn.x, -fn.y, -fn.z };
         float bv[3];
         for (int k = 0; k < 3; ++k) {
-            float grad = (0.62f - T.p[k].y) * 0.42f;                  // darker towards the ground
-            bv[k] = 0.14f + 0.74f * d - (grad > 0 ? grad : grad * 0.4f);
+            V3 n = fn;
+            if (T.smooth) {                                  // rotate the model-space vertex normal into the world
+                V3 m = T.n[k];
+                n = { m.x * ca - m.z * sa, m.y, m.x * sa + m.z * ca };
+                if (n.x * fn.x + n.y * fn.y + n.z * fn.z < 0.2f) n = fn;      // safety on creases
+            }
+            float d = fmaxf(0.0f, n.x * Lx + n.y * Ly + n.z * Lz);
+            float sp = fmaxf(0.0f, n.x * Hx + n.y * Hy + n.z * Hz);
+            sp = sp * sp; sp = sp * sp; sp = sp * sp; sp = sp * sp;           // ^16
+            float grad = (0.62f - T.p[k].y) * 0.42f;                          // darker towards the ground
+            bv[k] = 0.14f + 0.74f * d - (grad > 0 ? grad : grad * 0.4f) + (T.mat == MT_FLAT ? 0.0f : 0.38f * sp);
         }
-        // screen-space triangle
         float x0 = q[0].x + ox, y0 = q[0].y + oy, x1 = q[1].x + ox, y1 = q[1].y + oy, x2 = q[2].x + ox, y2 = q[2].y + oy;
         float area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
         if (fabsf(area) < 1e-6f) continue;
         int xmin = (int)floorf(fminf(x0, fminf(x1, x2))), xmax = (int)ceilf(fmaxf(x0, fmaxf(x1, x2)));
         int ymin = (int)floorf(fminf(y0, fminf(y1, y2))), ymax = (int)ceilf(fmaxf(y0, fmaxf(y1, y2)));
-        if (xmin < 0) xmin = 0; if (ymin < 0) ymin = 0; if (xmax > CW - 1) xmax = CW - 1; if (ymax > H - 1) ymax = H - 1;
+        if (xmin < 0) xmin = 0;
+        if (ymin < 0) ymin = 0;
+        if (xmax > CW - 1) xmax = CW - 1;
+        if (ymax > H - 1) ymax = H - 1;
         for (int y = ymin; y <= ymax; ++y)
             for (int x = xmin; x <= xmax; ++x) {
                 float px = x + 0.5f, py = y + 0.5f;
@@ -513,15 +568,14 @@ static void make_car_3q(SpriteId id, int dir) {
                 uint8_t o;
                 switch (T.mat) {
                 case MT_BODY:  o = dv > 0.80f ? C_SPEC : dv > 0.52f ? C_BL : dv > 0.22f ? C_BM : C_BD; break;
-                case MT_GLASS: o = (dv > 0.74f && ((x + y) & 1) == 0) || dv > 1.0f ? C_GL : C_GD; break;
+                case MT_GLASS: o = (dv > 0.95f && ((x + y) & 1) == 0) || dv > 1.3f ? C_GL : C_GD; break;
                 case MT_TYRE:  o = dv > 0.60f ? C_TYL : C_TY; break;
                 default:       o = T.flat; break;
                 }
                 col[idx] = o;
             }
     }
-    // composite: soft ground shadow first, then the car with dark outlines on the nearer parts
-    c.ellipse(CW * 0.5f + 4, 53.5f, CW * 0.46f, 4.2f, SHADOW);
+    c.ellipse(CW * 0.5f + (straight ? 0 : 4), 53.5f, CW * 0.46f, 4.2f, SHADOW);
     for (int y = 0; y < H; ++y)
         for (int x = 0; x < CW; ++x) {
             int i = y * CW + x;
@@ -542,10 +596,13 @@ static void make_car_3q(SpriteId id, int dir) {
     s.worldW = 700.0f * CW / CAR_W;
     s.hitW = 0.95f;
     s.emissive = (1 << C_TAIL) | (1 << C_TAILB);
-    s.anchorX = (int16_t)lroundf(rc.x + ox);
-    s.lightL = (int16_t)lroundf(fminf(tl.x, tr.x) + ox);
-    s.lightR = (int16_t)lroundf(fmaxf(tl.x, tr.x) + ox);
+    s.anchorX = straight ? 0 : (int16_t)lroundf(rc.x + ox);
+    s.lightL = straight ? 0 : (int16_t)lroundf(fminf(tl.x, tr.x) + ox);
+    s.lightR = straight ? 0 : (int16_t)lroundf(fmaxf(tl.x, tr.x) + ox);
+    if (!straight && yaw > -0.3f && yaw < 0.3f) { /* mild turn: same placement rules as the 3/4 views */ }
 }
+
+static void make_car_3q(SpriteId id, int dir) { render_car(id, (dir < 0 ? 1.0f : -1.0f) * 0.40f, 0.07f, false); }
 
 void car_palette(uint16_t out[16], const Livery& l, bool braking) {
     out[0] = 0;
