@@ -714,6 +714,159 @@ static void make_warehouse() {
     s.emissive = (1 << 6) | (1 << 7) | (1 << 8);
 }
 
+
+// ---- roadside dressing --------------------------------------------------------------
+// wooden crates and a barrel: 1 outline 2 wood dark 3 wood 4 wood light 5 barrel 6 barrel dark 7 steel band
+static void crate(Canvas& c, int x, int y, int w, int h) {
+    c.rect(x, y, w, h, 3);
+    c.rect(x, y, w, 2, 4); c.rect(x, y, 2, h, 4);
+    c.rect(x + w - 2, y, 2, h, 2); c.rect(x, y + h - 2, w, 2, 2);
+    c.rect(x + 3, y + 3, w - 6, 1, 2); c.rect(x + 3, y + h - 4, w - 6, 1, 2);
+    c.rect(x + 3, y + 3, 1, h - 6, 2); c.rect(x + w - 4, y + 3, 1, h - 6, 2);
+    for (int k = 0; k <= 100; ++k) {
+        int px = x + 4 + (w - 9) * k / 100, py = y + 4 + (h - 9) * k / 100;
+        c.set(px, py, 2); c.set(px + 1, py, 2);
+    }
+}
+static void make_crates() {
+    Sprite& s = g_sprites[SPR_CRATES];
+    Canvas c(s, 96, 84);
+    c.ellipse(48, 80, 44, 3.5f, SHADOW);
+    crate(c, 4, 46, 42, 34);
+    crate(c, 48, 50, 44, 30);
+    crate(c, 12, 14, 36, 32);
+    // barrel on the right crate
+    c.rect(62, 24, 22, 27, 5); c.rect(78, 24, 6, 27, 6); c.rect(64, 26, 3, 23, 5);
+    c.ellipse(73, 24, 11, 3.5f, 7); c.ellipse(73, 51, 11, 3.5f, 6);
+    c.rect(62, 30, 22, 2, 7); c.rect(62, 43, 22, 2, 7);
+    c.outline(V_OUT);
+    s.worldW = 1300; s.hitW = 0.5f;
+}
+
+// jersey barrier with a warning lamp: 1 outline 2 grey dark 3 grey 4 (work) 5 red 6 white 7 amber 8 light grey
+static void make_barrier() {
+    Sprite& s = g_sprites[SPR_BARRIER];
+    Canvas c(s, 128, 44);
+    c.ellipse(64, 41, 60, 3, SHADOW);
+    c.quad(4, 40, 14, 12, 114, 12, 124, 40, 4);
+    for (int y = 12; y < 40; ++y)
+        for (int x = 0; x < 128; ++x)
+            if (c.get(x, y) == 4) c.set(x, y, ((x + y) / 9) & 1 ? 6 : 5);
+    c.rect(14, 12, 100, 2, 8);
+    c.rect(4, 38, 120, 2, 2);
+    c.rect(9, 6, 2, 6, 2);
+    c.disc(10, 5, 3.2f, 7);
+    c.rect(116, 6, 2, 6, 2);
+    c.disc(117, 5, 3.2f, 7);
+    c.outline(V_OUT);
+    s.worldW = 1500; s.hitW = 0.5f;
+    s.emissive = 1 << 7;
+}
+
+// tuft of tall beach grass: 1 outline 2 dark 3 mid 4 light 5 sand 6 sand dark 7 seed head
+static void make_dunegrass() {
+    Sprite& s = g_sprites[SPR_DUNEGRASS];
+    Canvas c(s, 72, 56);
+    Rng r(808);
+    c.ellipse(36, 52, 31, 4.5f, 6);
+    c.ellipse(36, 51, 29, 3.2f, 5);
+    for (int k = 0; k < 13; ++k) {
+        float x0 = 14.0f + k * 3.7f;
+        float lean = (k - 6) * 3.4f + r.range(-4, 4);
+        float top = 50.0f - r.range(24, 46);
+        float xm = x0 + lean * 0.35f, ym = (50.0f + top) * 0.5f;
+        float xt = x0 + lean, yt = top;
+        uint8_t col = (uint8_t)(2 + (k % 3));
+        c.thick(x0, 50, xm, ym, 1.5f, col);
+        c.thick(xm, ym, xt, yt, 1.0f, col);
+        if (k % 3 == 1) c.disc(xt, yt, 2.0f, 7);
+    }
+    c.outline(V_OUT);
+    s.worldW = 800; s.hitW = 0;
+}
+
+// wooden fence: 1 outline 2 dark 3 mid 4 light 5 cap (snow) 6 grass tuft
+static void make_fence() {
+    Sprite& s = g_sprites[SPR_FENCE];
+    Canvas c(s, 128, 60);
+    c.ellipse(64, 57, 60, 3, SHADOW);
+    for (int ry : { 22, 38 }) {
+        c.rect(0, ry, 128, 5, 3);
+        c.rect(0, ry, 128, 1, 4);
+        c.rect(0, ry + 4, 128, 1, 2);
+        c.rect(0, ry - 2, 128, 2, 5);
+    }
+    for (int x : { 6, 38, 70, 102 }) {
+        c.rect(x, 14, 8, 42, 3);
+        c.rect(x, 14, 3, 42, 4);
+        c.rect(x + 6, 14, 2, 42, 2);
+        c.rect(x - 1, 11, 10, 3, 5);
+        c.ellipse(x + 4, 55, 8, 3, 6);
+    }
+    c.outline(V_OUT);
+    s.worldW = 1700; s.hitW = 0.3f;
+}
+
+// round hay bales: 1 outline 2 straw dark 3 straw 4 straw light 5 strap
+static void hay_disc(Canvas& c, float cx, float cy, float rad) {
+    for (int y = (int)(cy - rad) - 1; y <= (int)(cy + rad) + 1; ++y)
+        for (int x = (int)(cx - rad) - 1; x <= (int)(cx + rad) + 1; ++x) {
+            float dx = x + 0.5f - cx, dy = y + 0.5f - cy, d = sqrtf(dx * dx + dy * dy);
+            if (d > rad) continue;
+            float a = atan2f(dy, dx);
+            uint8_t col = ((int)((d + a * 1.1f + 20.0f) / 2.6f) & 1) ? 3 : 4;
+            if (d > rad - 2.2f) col = 2;
+            else if (dx + dy < -rad * 0.55f && col == 3) col = 4;
+            c.set(x, y, col);
+        }
+    c.disc(cx, cy, 2.6f, 5);
+}
+static void make_haybale() {
+    Sprite& s = g_sprites[SPR_HAYBALE];
+    Canvas c(s, 80, 76);
+    c.ellipse(40, 72, 36, 3.5f, SHADOW);
+    hay_disc(c, 56, 54, 19);
+    hay_disc(c, 28, 46, 25);
+    c.outline(V_OUT);
+    s.worldW = 1100; s.hitW = 0.7f;
+}
+
+// flower patch: 1 outline 2 leaf dark 3 leaf 5 red 6 yellow 7 white 8 violet
+static void make_flowers() {
+    Sprite& s = g_sprites[SPR_FLOWERS];
+    Canvas c(s, 96, 44);
+    Rng r(1313);
+    c.ellipse(48, 36, 42, 7, 2);
+    c.ellipse(48, 34, 40, 6, 3);
+    for (int k = 0; k < 34; ++k) {
+        float fx = r.range(8, 88), fy = r.range(8, 34);
+        float ex = (fx - 48) / 42.0f, ey = (fy - 24) / 17.0f;
+        if (ex * ex + ey * ey > 1.0f) continue;
+        uint8_t col = (uint8_t)(5 + (k % 4));
+        c.rect((int)fx, (int)fy + 3, 1, 5, 2);
+        int ix = (int)fx, iy = (int)fy;
+        c.set(ix, iy, col); c.set(ix - 1, iy, col); c.set(ix + 1, iy, col); c.set(ix, iy - 1, col); c.set(ix, iy + 1, col);
+        c.set(ix, iy, col == 6 ? 5 : 6);
+    }
+    s.worldW = 1200; s.hitW = 0;
+}
+
+// snow marker pole: 1 outline 3 red 4 white 5 snow 6 dark 7 amber
+static void make_pole() {
+    Sprite& s = g_sprites[SPR_POLE];
+    Canvas c(s, 40, 132);
+    c.ellipse(20, 128, 13, 3, SHADOW);
+    c.ellipse(20, 126, 14, 4.5f, 5);
+    for (int y = 12; y < 128; ++y) c.rect(18, y, 5, 1, ((y - 12) / 14) & 1 ? 4 : 3);
+    c.rect(16, 4, 9, 8, 6);
+    c.disc(20.5f, 8, 2.4f, 7);
+    float flag[] = { 23, 16, 36, 20, 23, 26 };
+    c.poly(flag, 3, 3);
+    c.outline(V_OUT);
+    s.worldW = 380; s.hitW = 0.1f;
+    s.emissive = 1 << 7;
+}
+
 void sprites_init() {
     make_cars();
     make_palm();
@@ -742,6 +895,13 @@ void sprites_init() {
     make_board(SPR_BOARD_D, "SURF", 3, "BEACH CLUB");
     make_board(SPR_BOARD_E, "SKI", 4, "GLACIER LODGE");
     make_board(SPR_BOARD_F, "PORT", 3, "CARGO TERMINAL");
+    make_crates();
+    make_barrier();
+    make_dunegrass();
+    make_fence();
+    make_haybale();
+    make_flowers();
+    make_pole();
 }
 
 // ------------------------------------------------------------------ palettes
@@ -832,6 +992,20 @@ static void build_palettes() {
     set_pal(SPR_HUT, 3, { 0, O, rgb(206, 122, 60), rgb(246, 156, 74), rgb(255, 196, 116), rgb(122, 92, 42), rgb(196, 154, 72), rgb(232, 204, 114), rgb(60, 204, 224) });
     set_pal(SPR_HUT, 4, { 0, O, rgb(104, 66, 40), rgb(148, 96, 58), rgb(188, 130, 80), rgb(168, 194, 222), rgb(228, 240, 252), rgb(255, 255, 255), rgb(255, 222, 130) });
     set_pal(SPR_HUT, 5, { 0, O, rgb(60, 66, 80), rgb(90, 98, 116), rgb(122, 132, 152), rgb(40, 44, 56), rgb(70, 76, 90), rgb(100, 108, 126), rgb(255, 190, 90) });
+    // roadside dressing, same look in every theme (fence caps and tufts follow the snow)
+    for (int t = 0; t < 6; ++t) {
+        bool snowy = t == 1 || t == 4;
+        set_pal(SPR_CRATES, t, { 0, O, rgb(94, 62, 34), rgb(150, 104, 58), rgb(200, 152, 92), rgb(40, 96, 170), rgb(26, 60, 118), rgb(206, 210, 220) });
+        set_pal(SPR_BARRIER, t, { 0, O, rgb(90, 92, 104), rgb(150, 154, 166), 0, rgb(214, 48, 44), rgb(246, 246, 246), rgb(255, 176, 40), rgb(200, 204, 214) });
+        set_pal(SPR_DUNEGRASS, t, { 0, O, rgb(52, 120, 56), rgb(104, 170, 66), rgb(190, 214, 100), rgb(240, 216, 150), rgb(214, 186, 120), rgb(224, 186, 110) });
+        set_pal(SPR_FENCE, t, { 0, O, rgb(92, 64, 40), rgb(142, 100, 62), rgb(190, 146, 96), snowy ? rgb(246, 250, 255) : rgb(214, 176, 126),
+                                 t == 4 ? rgb(214, 228, 246) : t == 1 ? rgb(236, 244, 252) : rgb(84, 156, 58) });
+        set_pal(SPR_HAYBALE, t, { 0, O, rgb(176, 128, 40), rgb(226, 180, 64), rgb(250, 222, 120), rgb(120, 84, 34) });
+        set_pal(SPR_FLOWERS, t, { 0, O, rgb(30, 96, 44), rgb(60, 150, 60), 0, rgb(236, 52, 70), rgb(255, 214, 40), rgb(255, 255, 255), rgb(160, 90, 220) });
+        set_pal(SPR_POLE, t, { 0, O, 0, rgb(222, 40, 44), rgb(248, 248, 250), rgb(236, 244, 255), rgb(30, 34, 48), rgb(255, 176, 40) });
+    }
+    // alpine chalet (timber with a snowy roof), like the glacier one
+    set_pal(SPR_HUT, 1, { 0, O, rgb(104, 66, 40), rgb(148, 96, 58), rgb(188, 130, 80), rgb(168, 194, 222), rgb(228, 240, 252), rgb(255, 255, 255), rgb(255, 222, 130) });
     s_palReady = true;
 }
 

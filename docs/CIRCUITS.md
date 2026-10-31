@@ -133,6 +133,13 @@ se choisit avec `theme` ; il ne change jamais la route.
 | `glacier` | nuit polaire, aurore boréale | pics de glace, forêt de sapins | 0-25 % forêt enneigée · 25-45 % lac gelé (glace bleue, bonshommes de neige) · 45-70 % gorge de cristaux · 70-100 % village de chalets |
 | `harbor` | port de nuit, lampes au sodium | lune, projecteurs, skyline basse, piles de conteneurs | 0-24 % docks (conteneurs, grues) · 24-46 % entrepôts · 46-80 % quai (grues des deux côtés) · 80-100 % ville portuaire. Tout passage en altitude (un pont) devient un viaduc au-dessus de l'eau noire, avec phare au loin |
 
+Chaque thème reçoit en plus des **détails de bord de route**, tirés dans un flux aléatoire à part
+(ils ne déplacent pas le décor de base) : clôtures, bottes de foin et fleurs (`coast`, `alpine`,
+chalets en plus pour `alpine`), herbe de dune sur le sable (`tropic`), balises rouges et blanches
+(`glacier`), caisses et barrières de chantier, garde-corps sur les ponts (`harbor`). Le fond montre
+aussi la mer à l'horizon : voiliers à Palm Bay, cargos éclairés à Night Harbor. Les sols ont une
+texture légère (touffes, rides de sable, traces de vent, fissures, reflets sur l'eau).
+
 Les sections sont calculées en pourcentage de la longueur du tour : un circuit plus court ou plus
 long garde les mêmes enchaînements. Les graines `seed` et `bgseed` mélangent les détails (position
 des arbres, taille des îles…) sans changer l'enchaînement.

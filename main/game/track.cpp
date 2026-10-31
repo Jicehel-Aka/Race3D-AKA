@@ -372,6 +372,45 @@ void sceneryHarbor(Track& t, std::vector<Prop>& P, Rng& r, int i, int n, float m
     }
 }
 
+// ---- roadside dressing: fences, hay, flowers, dune grass, marker poles, crates, barriers ----
+// Own random stream, so the original layout of every circuit stays as it was.
+void dressing(Track& t, std::vector<Prop>& P, Rng& r, int i, int n, float maxY) {
+    int p = i * 100 / n;
+    switch (t.theme) {
+    case THEME_COAST: {
+        bool farm = (p >= 12 && p < 32) || (p >= 58 && p < 74);
+        if (farm && i % 2 == 0) addProp(P, i, SPR_FENCE, ((i / 40) & 1) ? -1.55f : 1.55f);
+        if (farm && i % 19 == 3) { float sd = rsd(r); float o = r.range(2.4f, 4.8f); float f = r.f(); addProp(P, i, SPR_HAYBALE, sd * o, f < 0.5f); }
+        if (i % 11 == 5) { float sd = rsd(r); float o = r.range(1.4f, 3.6f); float f = r.f(); addProp(P, i, SPR_FLOWERS, sd * o, f < 0.5f); }
+        break; }
+    case THEME_ALPINE: {
+        bool farm = (p >= 8 && p < 26) || (p >= 52 && p < 68);
+        if (farm && i % 2 == 0) addProp(P, i, SPR_FENCE, ((i / 40) & 1) ? 1.55f : -1.55f);
+        if (i % 9 == 4) { float sd = rsd(r); float o = r.range(1.4f, 4.0f); float f = r.f(); addProp(P, i, SPR_FLOWERS, sd * o, f < 0.5f); }
+        if (i % 41 == 12) { float sd = rsd(r); float o = r.range(2.6f, 3.4f); float f = r.f(); addProp(P, i, SPR_HUT, sd * o, f < 0.5f); }
+        break; }
+    case THEME_TROPIC: {
+        if (altGround(t, i, n, maxY)) {
+            if (i % 3 == 1) { float sd = rsd(r); float o = r.range(1.35f, 4.8f); float f = r.f(); addProp(P, i, SPR_DUNEGRASS, sd * o, f < 0.5f); }
+            if (i % 4 == 3) { float sd = rsd(r); float o = r.range(1.35f, 3.0f); float f = r.f(); addProp(P, i, SPR_DUNEGRASS, sd * o, f < 0.5f); }
+        }
+        break; }
+    case THEME_GLACIER: {
+        int every = (p >= 25 && p < 70) ? 6 : 12;
+        if (i % every == 0) { addProp(P, i, SPR_POLE, -1.3f); addProp(P, i, SPR_POLE, 1.3f); }
+        break; }
+    case THEME_HARBOR: {
+        if (altGround(t, i, n, maxY)) {
+            if (i % 2 == 0) { addProp(P, i, SPR_BARRIER, -1.28f); addProp(P, i, SPR_BARRIER, 1.28f, true); }
+        } else {
+            if (i % 7 == 2) { float sd = rsd(r); float o = r.range(1.6f, 2.4f); float f = r.f(); addProp(P, i, SPR_CRATES, sd * o, f < 0.5f); }
+            if (((p / 6) % 3) == 0 && i % 2 == 1) addProp(P, i, SPR_BARRIER, ((i / 60) & 1) ? 1.3f : -1.3f);
+        }
+        break; }
+    default: break;
+    }
+}
+
 void scenery(Track& t, int id) {
     Rng r(g_trackDefs[id].seed);
     auto& P = t.props;
@@ -422,6 +461,8 @@ void scenery(Track& t, int id) {
         case THEME_HARBOR:  sceneryHarbor(t, P, r, i, n, maxY); break;
         }
     }
+    Rng r2(g_trackDefs[id].seed ^ 0x5bd1e995u);
+    for (int i = 20; i < n - 4; ++i) dressing(t, P, r2, i, n, maxY);
     std::stable_sort(P.begin(), P.end(), [](const Prop& a, const Prop& b) { return a.seg < b.seg; });
     for (size_t k = 0; k < P.size(); ++k) {
         Seg& s = t.segs[P[k].seg];

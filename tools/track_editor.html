@@ -231,7 +231,8 @@ const SONGS = ['SUNSET DRIVE', 'SUMMIT RUSH', 'NEON NIGHTS', 'SEA BREEZE', 'POLA
 const SPR = { PALM: 3, PINE: 4, TREE: 5, BUSH: 6, ROCK: 7, BOARD_A: 8, BOARD_B: 9, BOARD_C: 10, CHEVRON: 11, LAMP: 12,
               BUILDING_A: 13, BUILDING_B: 14, BUILDING_C: 15, GANTRY: 16,
               PARASOL: 17, HUT: 18, LIGHTHOUSE: 19, ICE: 20, SNOWMAN: 21, CONTAINER: 22, CONTAINER2: 23, CRANE: 24,
-              WAREHOUSE: 25, BOARD_D: 26, BOARD_E: 27, BOARD_F: 28 };
+              WAREHOUSE: 25, BOARD_D: 26, BOARD_E: 27, BOARD_F: 28,
+              CRATES: 29, BARRIER: 30, DUNEGRASS: 31, FENCE: 32, HAYBALE: 33, FLOWERS: 34, POLE: 35 };
 
 const SPEC = {
   straight: { label: 'Ligne droite', args: [{ k: 'len', n: 'Longueur' }, { k: 'hill', n: 'Pente', opt: true }], def: ['MEDIUM', ''] },
@@ -471,6 +472,38 @@ function buildScenery(segs, theme, seed) {
           if (i % 5 === 2) { const k = R.irange(0, 2), o = R.range(1.9, 2.4); A(i, SPR.BUILDING_A + k, o); }
           if (i % 90 === 45) { const sd = rsd(), k = R.irange(0, 2); A(i, SPR.BOARD_A + k, sd * 1.5); }
         }
+      }
+    }
+  }
+  // Décorations de bord de route : flux aléatoire à part, comme dressing() en C++.
+  const r2 = Rng((seed ^ 0x5bd1e995) >>> 0);
+  const rs2 = () => r2.f() < 0.5 ? -1 : 1;
+  for (let i = 20; i < n - 4; i++) {
+    const p = Math.floor(i * 100 / n);
+    if (theme === 0) {
+      const farm = (p >= 12 && p < 32) || (p >= 58 && p < 74);
+      if (farm && i % 2 === 0) add(i, SPR.FENCE, (Math.floor(i / 40) & 1) ? -1.55 : 1.55, false);
+      if (farm && i % 19 === 3) { const sd = rs2(), o = r2.range(2.4, 4.8), f = r2.f(); add(i, SPR.HAYBALE, sd * o, f < 0.5); }
+      if (i % 11 === 5) { const sd = rs2(), o = r2.range(1.4, 3.6), f = r2.f(); add(i, SPR.FLOWERS, sd * o, f < 0.5); }
+    } else if (theme === 1) {
+      const farm = (p >= 8 && p < 26) || (p >= 52 && p < 68);
+      if (farm && i % 2 === 0) add(i, SPR.FENCE, (Math.floor(i / 40) & 1) ? 1.55 : -1.55, false);
+      if (i % 9 === 4) { const sd = rs2(), o = r2.range(1.4, 4.0), f = r2.f(); add(i, SPR.FLOWERS, sd * o, f < 0.5); }
+      if (i % 41 === 12) { const sd = rs2(), o = r2.range(2.6, 3.4), f = r2.f(); add(i, SPR.HUT, sd * o, f < 0.5); }
+    } else if (theme === 3) {
+      if (altGround(segs, i, n, theme, maxY)) {
+        if (i % 3 === 1) { const sd = rs2(), o = r2.range(1.35, 4.8), f = r2.f(); add(i, SPR.DUNEGRASS, sd * o, f < 0.5); }
+        if (i % 4 === 3) { const sd = rs2(), o = r2.range(1.35, 3.0), f = r2.f(); add(i, SPR.DUNEGRASS, sd * o, f < 0.5); }
+      }
+    } else if (theme === 4) {
+      const every = (p >= 25 && p < 70) ? 6 : 12;
+      if (i % every === 0) { add(i, SPR.POLE, -1.3, false); add(i, SPR.POLE, 1.3, false); }
+    } else if (theme === 5) {
+      if (altGround(segs, i, n, theme, maxY)) {
+        if (i % 2 === 0) { add(i, SPR.BARRIER, -1.28, false); add(i, SPR.BARRIER, 1.28, true); }
+      } else {
+        if (i % 7 === 2) { const sd = rs2(), o = r2.range(1.6, 2.4), f = r2.f(); add(i, SPR.CRATES, sd * o, f < 0.5); }
+        if (Math.floor(p / 6) % 3 === 0 && i % 2 === 1) add(i, SPR.BARRIER, (Math.floor(i / 60) & 1) ? 1.3 : -1.3, false);
       }
     }
   }
@@ -972,7 +1005,8 @@ function drawRows(ps, maxy, th, sg) {
 const SPR_DIM = { 3: [1400, 1.76], 4: [1150, 2.05], 5: [1700, 1.18], 6: [1000, 0.55], 7: [1000, 0.71], 8: [2300, 0.76], 9: [2300, 0.76], 10: [2300, 0.76],
   11: [800, 1], 12: [950, 3], 13: [3600, 1.97], 14: [2880, 2.46], 15: [3960, 1.79], 16: [5280, 0.44],
   17: [900, 1.25], 18: [1700, 0.84], 19: [1000, 4.11], 20: [1500, 1.11], 21: [650, 1.46], 22: [2200, 0.84], 23: [2200, 0.59],
-  24: [3000, 1.35], 25: [4200, 0.5], 26: [2300, 0.76], 27: [2300, 0.76], 28: [2300, 0.76] };
+  24: [3000, 1.35], 25: [4200, 0.5], 26: [2300, 0.76], 27: [2300, 0.76], 28: [2300, 0.76],
+  29: [1300, 0.875], 30: [1500, 0.344], 31: [800, 0.78], 32: [1700, 0.47], 33: [1100, 0.95], 34: [1200, 0.46], 35: [380, 3.3] };
 function drawProp(g, ps, pr, th) {
   const dim = SPR_DIM[pr.spr]; if (!dim) return;
   const sc = ps.s1, dw = dim[0] * sc * SW / 2; if (dw < 1.2) return;
@@ -1003,6 +1037,15 @@ function drawProp(g, ps, pr, th) {
     case SPR.WAREHOUSE: rect(0.03, 0.35, 0.94, 0.65, [76, 88, 108]); tri([[0, 0.38], [0.5, 0.05], [1, 0.38]], [46, 52, 66]); rect(0.35, 0.52, 0.3, 0.48, [255, 196, 96]); rect(0.08, 0.42, 0.1, 0.08, [140, 212, 255]); rect(0.82, 0.42, 0.1, 0.08, [140, 212, 255]); break;
     case SPR.BOARD_D: case SPR.BOARD_E: case SPR.BOARD_F: { const col = pr.spr === 26 ? [0, 150, 190] : pr.spr === 27 ? [20, 56, 120] : [10, 20, 44];
       rect(0.18, 0.55, 0.05, 0.45, [90, 90, 100]); rect(0.77, 0.55, 0.05, 0.45, [90, 90, 100]); rect(0, 0, 1, 0.62, [250, 250, 250]); rect(0.04, 0.06, 0.92, 0.5, col); rect(0.12, 0.2, 0.76, 0.1, pr.spr === 28 ? [255, 200, 80] : [250, 250, 250]); rect(0.2, 0.38, 0.5, 0.06, [250, 230, 120]); break; }
+    case SPR.CRATES: rect(0.04, 0.55, 0.44, 0.4, [150, 104, 58]); rect(0.5, 0.6, 0.46, 0.35, [150, 104, 58]); rect(0.12, 0.17, 0.38, 0.38, [150, 104, 58]); rect(0.65, 0.29, 0.22, 0.32, [40, 96, 170]); break;
+    case SPR.BARRIER: tri([[0.03, 0.9], [0.11, 0.27], [0.89, 0.27], [0.97, 0.9]], [240, 240, 244]);
+      for (let k = 0; k < 6; k++) tri([[0.1 + k * 0.15, 0.9], [0.18 + k * 0.15, 0.27], [0.26 + k * 0.15, 0.27], [0.18 + k * 0.15, 0.9]], [214, 48, 44]); break;
+    case SPR.DUNEGRASS: ell(0.5, 0.92, 0.42, 0.07, [214, 186, 120]); for (let k = 0; k < 7; k++) tri([[0.2 + k * 0.1, 0.92], [0.12 + k * 0.12, 0.1 + (k % 3) * 0.15], [0.26 + k * 0.1, 0.92]], k & 1 ? [104, 170, 66] : [52, 120, 56]); break;
+    case SPR.FENCE: rect(0, 0.36, 1, 0.09, [142, 100, 62]); rect(0, 0.64, 1, 0.09, [142, 100, 62]); for (let k = 0; k < 4; k++) rect(0.05 + k * 0.25, 0.23, 0.06, 0.7, [142, 100, 62]);
+      if (model.meta.theme === 1 || model.meta.theme === 4) rect(0, 0.33, 1, 0.04, [246, 250, 255]); break;
+    case SPR.HAYBALE: ell(0.35, 0.62, 0.32, 0.32, [226, 180, 64]); ell(0.7, 0.72, 0.24, 0.24, [226, 180, 64]); break;
+    case SPR.FLOWERS: ell(0.5, 0.78, 0.46, 0.2, [60, 150, 60]); for (let k = 0; k < 14; k++) rect(0.1 + (hash32(pr.seg * 5 + k) % 80) / 100, 0.2 + (hash32(pr.seg + k * 9) % 40) / 100, 0.03, 0.08, [[236, 52, 70], [255, 214, 40], [255, 255, 255], [160, 90, 220]][k % 4]); break;
+    case SPR.POLE: rect(0.43, 0.08, 0.14, 0.9, [248, 248, 250]); for (let k = 0; k < 4; k++) rect(0.43, 0.1 + k * 0.22, 0.14, 0.11, [222, 40, 44]); tri([[0.57, 0.12], [0.9, 0.15], [0.57, 0.2]], [222, 40, 44]); break;
     case SPR.CHEVRON: rect(0, 0, 1, 1, [20, 20, 24]); rect(0.06, 0.06, 0.88, 0.88, [250, 210, 40]); { const s = pr.flip ? -1 : 1, o = pr.flip ? 1 : 0; tri([[o + s * 0.22, 0.2], [o + s * 0.62, 0.5], [o + s * 0.22, 0.8], [o + s * 0.34, 0.5]], [20, 20, 24]); } break;
     case SPR.LAMP: rect(0.46, 0.1, 0.08, 0.9, [110, 110, 124]); rect(pr.flip ? 0.2 : 0.46, 0.08, 0.34, 0.05, [110, 110, 124]);
       if (model.meta.theme === 2 || model.meta.theme === 5) { g.fillStyle = 'rgba(255,220,130,.9)'; g.beginPath(); g.arc(x + (pr.flip ? 0.24 : 0.78) * dw, y + 0.12 * dh, Math.max(1.5, dw * 0.22), 0, 7); g.fill(); } break;

@@ -298,6 +298,66 @@ void glacier_far(const Track& tr, const Theme& th, int off, int baseY) {
     }
 }
 
+// Sea along the horizon (Palm Bay, Night Harbor): graded water, wave glints, sailing boats / moored ships.
+void sea_band(const Track& tr, const Theme& th, int off, int baseY) {
+    (void)th;
+    const int M = Track::BG_W - 1;
+    const bool harbor = tr.theme == THEME_HARBOR;
+    const int SH = harbor ? 11 : 12;
+    for (int x = 0; x < W; ++x) {
+        int col = (x + off) & M;
+        uint16_t* p = fb + x;
+        for (int k = 0; k < SH; ++k) {
+            int y = baseY - SH + k;
+            if (y < 0 || y >= H) continue;
+            int kk = k * 255 / (SH - 1);
+            uint16_t c;
+            if (harbor) {
+                c = lerp(rgb(30, 50, 82), rgb(8, 18, 36), kk);
+                if (k > 0 && (hash32((col / 3) * 13 + 5) % 9) == 0 && (k & 1) == 0) c = lerp(c, rgb(255, 190, 90), 150 - k * 14);   // lamp reflections
+                else if ((col * 3 + k * 7) % 23 == 0) c = lerp(c, rgb(120, 150, 200), 90);
+            } else {
+                c = lerp(rgb(150, 226, 226), rgb(18, 142, 186), kk);
+                if (k > 1 && (col * 3 + k * 7) % 17 == 0) c = lerp(c, rgb(255, 255, 255), 110);
+                if (hash32(col * 31 + k * 977) % 89 == 0) c = rgb(255, 255, 255);
+            }
+            p[y * W] = c;
+        }
+    }
+    if (harbor) {
+        for (int bc : { 330, 760 }) {                        // moored ships with lit portholes
+            int sx = (bc - off) & M;
+            if (sx > W) continue;
+            int by = baseY - 1;
+            for (int x = 0; x < 46; ++x) {
+                int px = sx + x; if (px < 0 || px >= W) continue;
+                int hullTop = x < 4 ? by - 3 + (4 - x) / 2 : by - 4;
+                for (int y = hullTop; y <= by; ++y) if (y >= 0 && y < H) fb[y * W + px] = (y == by) ? rgb(120, 28, 30) : rgb(26, 32, 46);
+                if (x > 2 && x < 43 && (x & 3) == 0 && by - 2 >= 0) fb[(by - 2) * W + px] = rgb(255, 210, 110);
+                if (x >= 4 && x < 28 && by - 8 >= 0) {          // deck load of containers
+                    uint16_t cc = ((x / 6) & 1) ? rgb(196, 56, 46) : rgb(46, 100, 174);
+                    for (int y = by - 8; y < by - 4; ++y) fb[y * W + px] = (x % 6 == 0) ? scale(cc, 160) : cc;
+                }
+                if (x >= 32 && x < 42) for (int y = by - 10; y < by - 4; ++y) if (y >= 0) fb[y * W + px] = (y == by - 8) ? rgb(255, 210, 110) : rgb(184, 190, 204);
+                if (x >= 35 && x < 39) for (int y = by - 14; y < by - 10; ++y) if (y >= 0) fb[y * W + px] = (y == by - 12) ? rgb(220, 40, 44) : rgb(70, 74, 90);
+            }
+        }
+    } else {
+        for (int bc : { 150, 530, 880 }) {                    // sailing boats
+            int sx = (bc - off) & M;
+            if (sx > W) continue;
+            int by = baseY - 2;
+            for (int x = -5; x <= 5; ++x) { int px = sx + x; if (px >= 0 && px < W && by >= 0) fb[by * W + px] = (x == -5 || x == 5) ? rgb(250, 250, 250) : rgb(210, 70, 60); }
+            for (int y = 1; y <= 13; ++y) {
+                int yy = by - y; if (yy < 0) break;
+                int wl = (14 - y) * 5 / 13, wr = (14 - y) * 3 / 13;
+                for (int x = -wl; x <= 0; ++x) { int px = sx + x; if (px >= 0 && px < W) fb[yy * W + px] = x > -wl / 3 ? rgb(236, 240, 246) : rgb(255, 255, 255); }
+                for (int x = 1; x <= wr; ++x) { int px = sx + x; if (px >= 0 && px < W) fb[yy * W + px] = rgb(214, 222, 236); }
+            }
+        }
+    }
+}
+
 void draw_layers(const Race& r, int baseY) {
     const Track& tr = r.track;
     const Theme& th = g_themes[tr.theme];
@@ -328,9 +388,11 @@ void draw_layers(const Race& r, int baseY) {
             p[y * W] = c;
         }
     }
+    if (tr.theme == THEME_TROPIC || tr.theme == THEME_HARBOR) sea_band(tr, th, off, baseY);
     for (int x = 0; x < W; ++x) {
         int col = (x + offN) & M;
         int h = tr.nearH[col];
+        if (tr.theme == THEME_HARBOR && hash32(((col + 5) / 16) * 7 + 3) % 3 == 0) h = 0;   // gaps in the stacks: the sea shows through
         int top = baseY - h;
         uint16_t* p = fb + x;
         for (int y = top < 0 ? 0 : top; y < baseY + 2 && y < H; ++y) {
@@ -352,6 +414,7 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
     bool light = ((ps.idx / RUMBLE_LEN) & 1) == 0;
     int f = ps.fog;
     bool altG = sg.flags & SEGF_ALT;       // sand / ice / water sections
+    const int tid = (int)(&th - g_themes);
     uint16_t g1 = altG ? th.alt1 : th.grass1, g2 = altG ? th.alt2 : th.grass2;
     uint16_t grass = lerp(light ? g1 : g2, th.fog, f);
     uint16_t rumble = lerp(light ? th.rumble1 : th.rumble2, th.fog, f);
@@ -404,6 +467,30 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
         }
         span(r0, r1, rumble);
         span(r1, W, grass);
+        // ground texture: world-fixed dashes (tufts, ripples, wind streaks, cracks, glints)
+        if (ps.fog < 215 && tid != THEME_CITY) {
+            int j8 = (int)(t * 8);
+            if ((j8 & 1) == 0) {
+                for (int side = 0; side < 2; ++side)
+                    for (int k = 0; k < 2; ++k) {
+                        uint32_t hk = hash32((uint32_t)(ps.idx * 7349 + (j8 >> 1) * 131 + side * 977 + k * 31));
+                        if (hk % 5 >= 2) continue;
+                        float u = 1.45f + ((hk >> 8) & 255) / 255.0f * 6.0f;
+                        float len = w * (0.05f + ((hk >> 16) & 7) * 0.02f);
+                        if (len < 1.2f) continue;
+                        float x0 = side ? cx + w * u : cx - w * u - len;
+                        bool pale = (hk >> 20) & 1;
+                        uint16_t pc;
+                        switch (tid) {
+                        case THEME_TROPIC: pc = altG ? (pale ? lerp(grass, rgb(255, 250, 235), 90) : scale(grass, 226)) : (pale ? lerp(grass, rgb(190, 232, 120), 80) : scale(grass, 210)); break;
+                        case THEME_GLACIER: pc = altG ? (pale ? lerp(grass, rgb(255, 255, 255), 120) : lerp(grass, rgb(70, 120, 190), 80)) : (pale ? lerp(grass, rgb(255, 255, 255), 130) : lerp(grass, rgb(150, 176, 214), 90)); break;
+                        case THEME_HARBOR: pc = altG ? (pale ? lerp(grass, rgb(255, 196, 110), 170) : lerp(grass, rgb(70, 110, 170), 70)) : (pale ? lerp(grass, rgb(130, 142, 164), 60) : scale(grass, 170)); break;
+                        default: pc = pale ? lerp(grass, rgb(200, 226, 110), 70) : scale(grass, 208); break;
+                        }
+                        span(x0, x0 + len, lerp(pc, th.fog, f));
+                    }
+            }
+        }
     }
 }
 
