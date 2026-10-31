@@ -1,7 +1,7 @@
 # Mountain roller coaster: blind crests, fast sweepers and a long downhill finish.
 name GLACIER RUN
-theme alpine
-music 1
+theme glacier
+music 4
 seed 7351
 bgseed 212
 

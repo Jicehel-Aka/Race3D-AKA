@@ -63,7 +63,7 @@ downhill SHORT
 straight MEDIUM
 )TRK" },
     // ---- 3: PALM BAY  (03_palm_bay.trk)
-    { "PALM BAY", THEME_COAST, 0, 4217, 58, R"TRK(
+    { "PALM BAY", THEME_TROPIC, 3, 4217, 58, R"TRK(
 straight MEDIUM
 curve SHORT MED
 road 10 10 10 -HARD 0
@@ -91,7 +91,7 @@ curve MEDIUM -EASY
 straight SHORT
 )TRK" },
     // ---- 4: GLACIER RUN  (04_glacier_run.trk)
-    { "GLACIER RUN", THEME_ALPINE, 1, 7351, 212, R"TRK(
+    { "GLACIER RUN", THEME_GLACIER, 4, 7351, 212, R"TRK(
 straight MEDIUM
 road MEDIUM SHORT MEDIUM 0 MED
 curve MEDIUM EASY -LOW
@@ -112,7 +112,7 @@ downhill LONG
 straight LONG
 )TRK" },
     // ---- 5: NIGHT HARBOR  (05_night_harbor.trk)
-    { "NIGHT HARBOR", THEME_CITY, 2, 9034, 305, R"TRK(
+    { "NIGHT HARBOR", THEME_HARBOR, 5, 9034, 305, R"TRK(
 straight LONG
 curve MEDIUM MED
 straight SHORT

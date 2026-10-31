@@ -109,6 +109,85 @@ void paint_sky_chunk(int theme, int c0) {
                 blendCircle(x, y, s, rgb(255, 255, 255), 210);
             });
         }
+    } else if (theme == THEME_TROPIC) {
+        at(480, 90, [&](int cx) {            // high tropical sun
+            glowCircle(cx, 30, 46, rgb(70, 66, 28));
+            fillCircle(cx, 30, 12, rgb(255, 255, 232));
+        });
+        for (int k = 0; k < 9; ++k) {        // small fair-weather cumulus
+            uint32_t hsh = hash32(k * 4421 + 9);
+            int y = 22 + (int)((hsh >> 12) % 56);
+            int s = 6 + (int)((hsh >> 20) % 7);
+            at((int)(hsh % PANO_W), 50, [&](int x) {
+                blendCircle(x, y + 3, s, rgb(190, 225, 240), 110);
+                blendCircle(x - s, y + 4, s * 2 / 3, rgb(255, 255, 255), 190);
+                blendCircle(x + s, y + 3, s * 2 / 3, rgb(255, 255, 255), 190);
+                blendCircle(x, y, s, rgb(255, 255, 255), 230);
+            });
+        }
+        for (int k = 0; k < 6; ++k) {        // thin high cirrus
+            uint32_t hsh = hash32(k * 613 + 41);
+            int y = 10 + (int)((hsh >> 8) % 40), len = 50 + (int)((hsh >> 16) % 80);
+            at((int)(hsh % PANO_W), 140, [&](int x) {
+                blendRect(x, y, len, 1, rgb(255, 255, 255), 90);
+                blendRect(x + 12, y + 2, len - 24, 1, rgb(255, 255, 255), 50);
+            });
+        }
+    } else if (theme == THEME_GLACIER) {
+        for (int k = 0; k < 110; ++k) {      // stars
+            uint32_t hsh = hash32(k * 2237 + 3);
+            int y = (int)((hsh >> 10) % (HORIZON - 40));
+            uint16_t c = ((hsh >> 24) & 3) ? rgb(210, 220, 250) : rgb(250, 240, 220);
+            at((int)(hsh % PANO_W), 2, [&](int x) { pset(x, y, c); });
+        }
+        for (int x = 0; x < W; ++x) {        // aurora curtains (seamless over the 1024 px panorama)
+            float ph = (float)((c0 + x) % PANO_W) / PANO_W * 6.2831853f;
+            float yc = 36.0f + 12.0f * sinf(ph * 2) + 5.0f * sinf(ph * 5 + 1.0f);
+            float kk = 0.5f + 0.5f * sinf(ph * 3 + 0.5f);
+            uint16_t col = lerp(rgb(70, 255, 160), rgb(150, 90, 255), (int)(kk * 180));
+            float amp = 0.55f + 0.45f * sinf(ph * 4 + 2.0f);
+            for (int dy = -4; dy < 34; ++dy) {
+                int a = dy < 0 ? (4 + dy) * 22 : (int)((1.0f - dy / 34.0f) * 130);
+                a = (int)(a * amp);
+                if (a > 0) blendRect(x, (int)yc + dy, 1, 1, col, a);
+            }
+        }
+        at(700, 90, [&](int cx) {            // low polar sun
+            glowCircle(cx, HORIZON - 8, 48, rgb(104, 64, 64));
+            fillCircle(cx, HORIZON - 4, 10, rgb(255, 228, 196));
+        });
+    } else if (theme == THEME_HARBOR) {
+        for (int k = 0; k < 70; ++k) {       // stars
+            uint32_t hsh = hash32(k * 977 + 21);
+            int y = (int)((hsh >> 10) % (HORIZON - 50));
+            uint16_t c = rgb(170, 180, 210);
+            at((int)(hsh % PANO_W), 2, [&](int x) { pset(x, y, c); });
+        }
+        for (int k = 0; k < 34; ++k) blendRect(0, HORIZON - 1 - k, W, 1, rgb(255, 150, 60), (34 - k) * 2);   // sodium glow of the port
+        at(300, 80, [&](int mx) {            // full moon
+            glowCircle(mx, 44, 42, rgb(34, 40, 64));
+            fillCircle(mx, 44, 15, rgb(240, 244, 230));
+            fillCircle(mx - 5, 41, 3, rgb(212, 220, 208));
+            fillCircle(mx + 5, 49, 2, rgb(212, 220, 208));
+            fillCircle(mx + 4, 38, 2, rgb(220, 228, 216));
+        });
+        for (int k = 0; k < 8; ++k) {        // dark clouds, moon-lit edges
+            uint32_t hsh = hash32(k * 1291 + 5);
+            int y = 18 + (int)((hsh >> 12) % 60), len = 50 + (int)((hsh >> 20) % 90);
+            at((int)(hsh % PANO_W), 150, [&](int x) {
+                blendRect(x, y, len, 3, rgb(30, 44, 74), 150);
+                blendRect(x + 6, y, len / 2, 1, rgb(120, 140, 172), 70);
+            });
+        }
+        for (int b = 0; b < 2; ++b)          // port searchlights
+            at(b ? 820 : 130, 200, [&](int bx) {
+                int dir = b ? -1 : 1;
+                for (int dy = 0; dy < HORIZON - 8; ++dy) {
+                    int cx = bx + dir * dy * 7 / 10, w = 3 + dy / 6;
+                    int a = 30 - dy / 6; if (a < 8) a = 8;
+                    blendRect(cx - w / 2, HORIZON - 2 - dy, w, 1, rgb(200, 224, 245), a);
+                }
+            });
     } else {
         for (int k = 0; k < 160; ++k) {  // stars
             uint32_t hsh = hash32(k * 31337 + 7);
@@ -159,7 +238,7 @@ void draw_sky(const Race& r, float time) {
         memcpy(dst, row + sh, n1 * sizeof(uint16_t));
         if (n1 < W) memcpy(dst + n1, row, (W - n1) * sizeof(uint16_t));
     }
-    if (theme == THEME_CITY) {          // a few twinkling stars
+    if (theme == THEME_CITY || theme == THEME_HARBOR) {          // a few twinkling stars
         for (int k = 0; k < 16; ++k) {
             uint32_t hsh = hash32(k * 31337 + 7);
             int x = ((int)(hsh % PANO_W) - sh) & (PANO_W - 1);
@@ -184,12 +263,15 @@ void draw_layers(const Race& r, int baseY) {
         for (int y = top < 0 ? 0 : top; y < baseY && y < H; ++y) {
             int alt = baseY - y;
             uint16_t c = s_farGrad[alt > 127 ? 127 : alt];
-            if (tr.theme == THEME_ALPINE) {
-                int snowLine = 58 + (int)(hash32(col) % 6);
+            if (tr.theme == THEME_ALPINE || tr.theme == THEME_GLACIER) {
+                int snowLine = (tr.theme == THEME_GLACIER ? 38 : 58) + (int)(hash32(col) % 6);
                 int slope = (int)tr.farH[(col + 3) & M] - (int)tr.farH[(col - 3) & M];   // > 0 : faces away from the sun
-                if (alt > snowLine) c = (slope > 1 || ((col ^ y) & 7) == 0) ? lerp(th.farHi, th.farCol, 80) : th.farHi;
+                if (alt > snowLine) {
+                    if (tr.theme == THEME_GLACIER) c = slope > 1 ? lerp(th.farHi, th.farCol, 70) : th.farHi;
+                    else c = (slope > 1 || ((col ^ y) & 7) == 0) ? lerp(th.farHi, th.farCol, 80) : th.farHi;
+                }
                 else if (slope > 0) c = scale(c, 256 - (slope > 8 ? 8 : slope) * 7);
-            } else if (tr.theme == THEME_CITY) {
+            } else if (tr.theme == THEME_CITY || tr.theme == THEME_HARBOR) {
                 if (alt > 3 && alt < h - 2 && ((col / 2) & 1) == 0 && ((y + 1) % 4) == 0 && (hash32(col * 131 + y) % 5) == 0) c = th.farHi;
             } else if (alt > h - 3) {
                 c = lerp(c, th.farHi, 160);
@@ -220,7 +302,9 @@ void draw_layers(const Race& r, int baseY) {
 void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg) {
     bool light = ((ps.idx / RUMBLE_LEN) & 1) == 0;
     int f = ps.fog;
-    uint16_t grass = lerp(light ? th.grass1 : th.grass2, th.fog, f);
+    bool altG = sg.flags & SEGF_ALT;       // sand / ice / water sections
+    uint16_t g1 = altG ? th.alt1 : th.grass1, g2 = altG ? th.alt2 : th.grass2;
+    uint16_t grass = lerp(light ? g1 : g2, th.fog, f);
     uint16_t rumble = lerp(light ? th.rumble1 : th.rumble2, th.fog, f);
     uint16_t road = lerp(light ? th.road1 : th.road2, th.fog, f);
     uint16_t lane = lerp(th.lane, th.fog, f);
@@ -301,10 +385,16 @@ void draw_prop(const Race& r, const PSeg& ps, const Prop& pr) {
     if (x >= W || x + dw < 0 || y >= ps.clip) return;
     const uint16_t* pal = lit_palette(sprite_palette(pr.spr, r.track.theme), sp.emissive, th.ambient, th.fog, ps.fog);
     blit(sp, pal, x, y, dw, dh, ps.clip, pr.flip);
-    if (r.track.theme == THEME_CITY && pr.spr == SPR_LAMP && dw > 3 && ps.fog < 200) {
+    int tid = r.track.theme;
+    if ((tid == THEME_CITY || tid == THEME_HARBOR) && pr.spr == SPR_LAMP && dw > 3 && ps.fog < 200) {
         float hx = pr.flip ? (60 - 46) : 46;
         int gx = x + (int)(hx * destW / 60), gy = y + (int)(18 * destH / 180);
-        if (gy < ps.clip) glowCircle(gx, gy, (int)(destW * 0.45f) + 1, scale(rgb(150, 120, 60), 256 - ps.fog));
+        uint16_t gc = tid == THEME_HARBOR ? rgb(150, 100, 44) : rgb(150, 120, 60);
+        if (gy < ps.clip) glowCircle(gx, gy, (int)(destW * 0.45f) + 1, scale(gc, 256 - ps.fog));
+    }
+    if (tid == THEME_HARBOR && pr.spr == SPR_LIGHTHOUSE && dw > 2 && ps.fog < 235) {
+        int gx = x + dw / 2, gy = y + (int)(41 * destH / 230);
+        if (gy < ps.clip) glowCircle(gx, gy, (int)(destW * 0.9f) + 2, scale(rgb(170, 150, 80), 256 - ps.fog));
     }
 }
 

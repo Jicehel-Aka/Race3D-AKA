@@ -7,6 +7,7 @@ Ce guide explique comment sont faits les circuits, comment en créer un nouveau
 - [1. Comment un circuit est fait](#1-comment-un-circuit-est-fait)
 - [2. Ajouter un circuit en 4 étapes](#2-ajouter-un-circuit-en-4-étapes)
 - [3. L'éditeur](#3-léditeur)
+- [3 bis. Thèmes et musiques](#3-bis-thèmes-et-musiques)
 - [4. Écrire un circuit à la main (format .trk)](#4-écrire-un-circuit-à-la-main-format-trk)
 - [5. Les valeurs](#5-les-valeurs)
 - [6. Recettes](#6-recettes)
@@ -32,8 +33,9 @@ de long (≈ 1,1 m à l'échelle du jeu) et ne porte que deux informations :
 Un circuit de 2 500 à 3 000 segments donne un tour de 45 à 55 secondes.
 Tout le reste est **calculé automatiquement** à partir de ces segments et de quelques réglages :
 
-- le **décor** (palmiers, pins, immeubles, panneaux, chevrons dans les virages serrés,
-  portique de départ) selon le *thème* et une *graine* aléatoire ;
+- le **décor** (palmiers, pins, immeubles, conteneurs, panneaux, chevrons dans les virages
+  serrés, portique de départ) selon le *thème*, la position dans le tour et une *graine*
+  aléatoire ;
 - la **mini-carte** (le tracé est refermé automatiquement, il est donc toujours une boucle) ;
 - les **silhouettes du fond** (montagnes, skyline), selon le thème et une seconde graine ;
 - le **comportement des pilotes IA** (ils ralentissent avant les virages serrés).
@@ -48,7 +50,8 @@ curve LONG -EASY         # grand virage doux à gauche
 ```
 
 Les circuits d'origine (Sunset Coast, Alpine Pass, Neon City) sont écrits dans ce même
-format : leur résultat est identique, segment pour segment, à celui de la version 1.0.
+format : leur résultat est identique, segment pour segment et pixel pour pixel, à celui de la
+version 1.0.
 
 ## 2. Ajouter un circuit en 4 étapes
 
@@ -115,6 +118,38 @@ téléchargé reste la vraie sauvegarde.
 *Limites de l'aperçu :* les sprites (arbres, immeubles…) sont dessinés en formes simples
 et les voitures ne sont pas affichées ; en revanche leur position est exactement celle du jeu.
 
+## 3 bis. Thèmes et musiques
+
+Chaque thème a son ciel, sa palette, son fond, ses éléments de décor et ses sections : le long
+du tour, le décor change (plage, village, falaise… ; forêt, lac gelé, gorge de glace…). Le thème
+se choisit avec `theme` ; il ne change jamais la route.
+
+| `theme` | Ambiance | Fond / ciel | Sections du tour (en % de sa longueur) |
+|---|---|---|---|
+| `coast` | côte au coucher du soleil | soleil rétro, montagnes violettes | palmiers, buissons, rochers, panneaux |
+| `alpine` | montagne, plein jour | pics enneigés, nuages | pins, rochers, panneaux |
+| `city` | ville la nuit, néons | skyline, lune, étoiles | immeubles, lampadaires, panneaux |
+| `tropic` | baie tropicale en plein soleil | îles au large, dunes et palmiers, ciel bleu | 0-28 % plage (sable, parasols) · 28-50 % village de paillotes · 50-72 % falaise (rochers, phare) · 72-100 % tunnel de palmiers |
+| `glacier` | nuit polaire, aurore boréale | pics de glace, forêt de sapins | 0-25 % forêt enneigée · 25-45 % lac gelé (glace bleue, bonshommes de neige) · 45-70 % gorge de cristaux · 70-100 % village de chalets |
+| `harbor` | port de nuit, lampes au sodium | lune, projecteurs, skyline basse, piles de conteneurs | 0-24 % docks (conteneurs, grues) · 24-46 % entrepôts · 46-80 % quai (grues des deux côtés) · 80-100 % ville portuaire. Tout passage en altitude (un pont) devient un viaduc au-dessus de l'eau noire, avec phare au loin |
+
+Les sections sont calculées en pourcentage de la longueur du tour : un circuit plus court ou plus
+long garde les mêmes enchaînements. Les graines `seed` et `bgseed` mélangent les détails (position
+des arbres, taille des îles…) sans changer l'enchaînement.
+
+| `music` | Titre | Style |
+|---|---|---|
+| 0 | SUNSET DRIVE | synthwave, la mineur, 112 bpm |
+| 1 | SUMMIT RUSH | rapide et lumineux, ré majeur, 138 bpm |
+| 2 | NEON NIGHTS | sombre et nerveux, mi mineur, 124 bpm |
+| 3 | SEA BREEZE | tropical, basse syncopée, sol majeur, 128 bpm |
+| 4 | POLAR LIGHTS | lent et aérien, ré mineur, 96 bpm |
+| 5 | DOCK RUNNER | pulsation industrielle, fa dièse mineur, 118 bpm |
+
+![Palm Bay](preview/palm_bay.png)
+![Glacier Run](preview/glacier_run.png)
+![Night Harbor](preview/night_harbor.png)
+
 ## 4. Écrire un circuit à la main (format .trk)
 
 Un fichier `.trk` est du texte. Les lignes `name`, `theme`, `music`, `seed`, `bgseed`
@@ -124,8 +159,9 @@ décrivent le circuit ; les autres lignes sont les morceaux de route, dans l'ord
 ```
 # Une phrase de description (facultatif)
 name PALM BAY            # nom affiché dans le menu : 1 à 14 caractères A-Z 0-9 espace ' -
-theme coast              # coast | alpine | city
-music 0                  # 0 SUNSET DRIVE, 1 SUMMIT RUSH, 2 NEON NIGHTS
+theme tropic             # coast | alpine | city | tropic | glacier | harbor
+music 3                  # 0 SUNSET DRIVE, 1 SUMMIT RUSH, 2 NEON NIGHTS,
+                         # 3 SEA BREEZE, 4 POLAR LIGHTS, 5 DOCK RUNNER
 seed 4217                # graine du décor (changez-la pour mélanger arbres et panneaux)
 bgseed 58                # graine du fond (montagnes / skyline)
 
@@ -218,8 +254,9 @@ straight SHORT
   200 premiers segments.
 - **Pentes :** `road 10 10 10 0 60` (30 segments pour 60 de dénivelé) est un mur. Gardez
   la pente par segment inférieure à 1.
-- **Variété :** réutilisez le même thème sur deux circuits en changeant les graines et la
-  disposition ; la musique et le décor suivent le thème.
+- **Variété :** il y a six thèmes (voir la section « Thèmes et musiques »). Réutiliser un même
+  thème sur deux circuits est possible : changez les graines et la disposition ; le décor suit
+  le thème, la musique se choisit à part.
 
 Le diagnostic de l'éditeur signale automatiquement : lignes invalides, nom invalide, grille
 non droite ou non plane, circuit trop court ou trop long, pente excessive, altitude très
@@ -246,9 +283,9 @@ et mesure leurs temps. Les valeurs de référence (meilleur tour en *Hard*) :
 | Sunset Coast | côte | 2 950 | 51,5 s | grands virages rapides le long de la mer |
 | Alpine Pass | montagne | 2 715 | 49,0 s | grosses côtes et épingles |
 | Neon City | ville | 2 625 | 46,2 s | longs boulevards, virages serrés |
-| Palm Bay | côte | 2 529 | 44,9 s | technique : esses, épingle en montée, front de mer |
-| Glacier Run | montagne | 2 665 | 47,4 s | montagnes russes : crêtes, bosses, longue descente |
-| Night Harbor | ville | 2 806 | 49,2 s | nuit, docks : grandes droites, pont, chicane finale |
+| Palm Bay | tropique | 2 529 | 44,9 s | technique : esses, épingle en montée, front de mer |
+| Glacier Run | glacier | 2 665 | 47,4 s | montagnes russes : crêtes, bosses, longue descente |
+| Night Harbor | port | 2 806 | 49,2 s | nuit, docks : grandes droites, pont, chicane finale |
 
 Un circuit d'environ 45 à 52 s, sans sortie de route de l'IA, est dans la norme.
 
@@ -259,13 +296,13 @@ Un circuit d'environ 45 à 52 s, sans sortie de route de l'IA, est dans la norme
 | Nombre de circuits | 16 (`gen_tracks.py` refuse davantage) |
 | Longueur d'un circuit | 3 600 segments (la fin est ignorée au-delà) |
 | Nom | 14 caractères : A-Z, 0-9, espace, `'`, `-` |
-| Thèmes | 3 : `coast`, `alpine`, `city` (couleurs, ciel, décor) |
-| Musiques | 3 : choisies avec `music 0..2` |
+| Thèmes | 6 : `coast`, `alpine`, `city`, `tropic`, `glacier`, `harbor` (couleurs, ciel, fond, décor) |
+| Musiques | 6 : choisies avec `music 0..5` |
 | Pente | ±200 par commande ; courbure ±12 |
 
-Ajouter un **nouveau thème** (nouvelle palette, nouveau ciel, nouveaux sprites) ou une **nouvelle
-musique** demande de modifier le code (`g_themes` dans `track.cpp`, `render.cpp`, `sprites.cpp`,
-`music.cpp`) : ce n'est pas couvert par le format `.trk`.
+Ajouter un **septième thème** (nouvelle palette, nouveau ciel, nouveaux sprites) ou une **nouvelle
+musique** demande de modifier le code (`g_themes` et les recettes de décor dans `track.cpp`,
+`render.cpp`, `sprites.cpp`, `music.cpp`) : ce n'est pas couvert par le format `.trk`.
 
 **Records :** ils sont enregistrés par circuit. Le fichier de records de la version 1.0
 (3 circuits) est relu et converti automatiquement : les temps existants sont conservés.

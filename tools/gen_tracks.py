@@ -11,8 +11,9 @@ so after running it you only have to build the game.
 A .trk file is plain text:
 
     name PALM BAY          circuit name (max 14 letters, A-Z 0-9 space - ')
-    theme coast            coast | alpine | city
-    music 0                0 Sunset Drive, 1 Summit Rush, 2 Neon Nights
+    theme coast            coast | alpine | city | tropic | glacier | harbor
+    music 0                0 Sunset Drive, 1 Summit Rush, 2 Neon Nights,
+                           3 Sea Breeze, 4 Polar Lights, 5 Dock Runner
     seed 4242              scenery random seed (change it to reshuffle trees/signs)
     bgseed 77              backdrop random seed (mountains / skyline)
     straight MEDIUM        ...road commands, see docs/CIRCUITS.md
@@ -22,7 +23,9 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-THEMES = {"coast": "THEME_COAST", "alpine": "THEME_ALPINE", "city": "THEME_CITY"}
+THEMES = {"coast": "THEME_COAST", "alpine": "THEME_ALPINE", "city": "THEME_CITY",
+          "tropic": "THEME_TROPIC", "glacier": "THEME_GLACIER", "harbor": "THEME_HARBOR"}
+THEME_ORDER = ["coast", "alpine", "city", "tropic", "glacier", "harbor"]
 COMMANDS = {"straight", "curve", "road", "scurves", "bumps", "downhill"}
 KEYS = {"name", "theme", "music", "seed", "bgseed"}
 MAX_TRACKS = 16
@@ -55,15 +58,15 @@ def parse(path):
     if not re.fullmatch(r"[A-Z0-9 '\-]{1,14}", name):
         fail(path, 1, "name must be 1-14 characters: A-Z 0-9 space ' -")
     theme = meta["theme"].lower()
-    if theme.isdigit() and int(theme) < 3:
-        theme = ["coast", "alpine", "city"][int(theme)]
+    if theme.isdigit() and int(theme) < len(THEME_ORDER):
+        theme = THEME_ORDER[int(theme)]
     if theme not in THEMES:
-        fail(path, 1, "theme must be coast, alpine or city")
+        fail(path, 1, "theme must be one of: " + ", ".join(THEME_ORDER))
     for k in ("music", "seed", "bgseed"):
         if not meta[k].isdigit():
             fail(path, 1, "'%s' must be a whole number" % k)
-    if int(meta["music"]) > 2:
-        fail(path, 1, "music must be 0, 1 or 2")
+    if int(meta["music"]) > 5:
+        fail(path, 1, "music must be 0..5")
     text = "\n".join(body).strip("\n") + "\n"
     if ')TRK"' in text:
         fail(path, 1, "script contains the reserved sequence )TRK\"")

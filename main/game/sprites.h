@@ -10,6 +10,10 @@ enum SpriteId : uint8_t {
     SPR_CHEVRON, SPR_LAMP,
     SPR_BUILDING_A, SPR_BUILDING_B, SPR_BUILDING_C,
     SPR_GANTRY,
+    // added with the Palm Bay / Glacier Run / Night Harbor looks
+    SPR_PARASOL, SPR_HUT, SPR_LIGHTHOUSE, SPR_ICE, SPR_SNOWMAN,
+    SPR_CONTAINER, SPR_CONTAINER2, SPR_CRANE, SPR_WAREHOUSE,
+    SPR_BOARD_D, SPR_BOARD_E, SPR_BOARD_F,
     SPR_COUNT
 };
 
@@ -25,7 +29,7 @@ extern Sprite g_sprites[SPR_COUNT];
 
 void sprites_init();
 
-// Palette with 16 entries for a scenery sprite in the given theme (0..2).
+// Palette with 16 entries for a scenery sprite in the given theme (0..5).
 const uint16_t* sprite_palette(int id, int theme);
 
 // Car livery palette.

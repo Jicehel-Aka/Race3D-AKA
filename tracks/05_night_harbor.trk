@@ -1,7 +1,7 @@
 # Night race around the docks: flat-out straights, a bridge, a blind crest and a tight final chicane.
 name NIGHT HARBOR
-theme city
-music 2
+theme harbor
+music 5
 seed 9034
 bgseed 305
 

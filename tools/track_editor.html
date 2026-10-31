@@ -223,12 +223,15 @@ const PLAYER_Z = CAM_H * CAM_D, MAX_SPEED = SEG * 60, BG_W = 1024, MAP_N = 128;
 const LEN = { NONE: 0, SHORT: 25, MEDIUM: 50, MED: 50, LONG: 100 };
 const CURVE = { EASY: 2, MED: 4, MEDIUM: 4, HARD: 6 };
 const HILL = { LOW: 20, MED: 40, MEDIUM: 40, HIGH: 60 };
-const THEMES = [{"skyTop": [34, 18, 84], "skyMid": [200, 70, 120], "skyHorizon": [255, 180, 96], "fog": [246, 150, 120], "grass1": [98, 164, 64], "grass2": [86, 150, 58], "rumble1": [226, 40, 46], "rumble2": [246, 246, 246], "road1": [108, 104, 116], "road2": [100, 96, 108], "lane": [246, 246, 236], "shoulder": [196, 176, 140], "farCol": [130, 60, 130], "farHi": [176, 90, 150], "nearCol": [84, 36, 92], "nearHi": [110, 56, 110], "ground": [150, 80, 120], "fogDensity": 5.0, "ambient": 256, "name": "SUNSET COAST"}, {"skyTop": [28, 90, 210], "skyMid": [90, 160, 240], "skyHorizon": [196, 228, 255], "fog": [214, 232, 250], "grass1": [76, 156, 74], "grass2": [66, 140, 66], "rumble1": [210, 34, 34], "rumble2": [244, 244, 244], "road1": [110, 110, 118], "road2": [102, 102, 110], "lane": [244, 244, 244], "shoulder": [150, 150, 150], "farCol": [110, 132, 176], "farHi": [240, 246, 255], "nearCol": [36, 92, 64], "nearHi": [52, 116, 78], "ground": [150, 180, 170], "fogDensity": 4.0, "ambient": 256, "name": "ALPINE PASS"}, {"skyTop": [4, 4, 20], "skyMid": [26, 10, 60], "skyHorizon": [86, 26, 110], "fog": [44, 18, 74], "grass1": [26, 40, 46], "grass2": [22, 34, 40], "rumble1": [255, 40, 200], "rumble2": [0, 210, 255], "road1": [46, 46, 62], "road2": [40, 40, 56], "lane": [255, 226, 110], "shoulder": [70, 70, 90], "farCol": [26, 16, 52], "farHi": [255, 210, 110], "nearCol": [14, 10, 32], "nearHi": [120, 60, 200], "ground": [30, 14, 50], "fogDensity": 6.0, "ambient": 170, "name": "NEON CITY"}];
-const THEME_KEYS = ['coast', 'alpine', 'city'];
-const THEME_LABELS = ['Côte (coucher de soleil)', 'Montagne (neige, plein jour)', 'Ville (nuit, néons)'];
-const SONGS = ['SUNSET DRIVE', 'SUMMIT RUSH', 'NEON NIGHTS'];
+const THEMES = [{"skyTop": [34, 18, 84], "skyMid": [200, 70, 120], "skyHorizon": [255, 180, 96], "fog": [246, 150, 120], "grass1": [98, 164, 64], "grass2": [86, 150, 58], "rumble1": [226, 40, 46], "rumble2": [246, 246, 246], "road1": [108, 104, 116], "road2": [100, 96, 108], "lane": [246, 246, 236], "shoulder": [196, 176, 140], "farCol": [130, 60, 130], "farHi": [176, 90, 150], "nearCol": [84, 36, 92], "nearHi": [110, 56, 110], "ground": [150, 80, 120], "alt1": [98, 164, 64], "alt2": [86, 150, 58], "fogDensity": 5.0, "ambient": 256, "name": "SUNSET COAST"}, {"skyTop": [28, 90, 210], "skyMid": [90, 160, 240], "skyHorizon": [196, 228, 255], "fog": [214, 232, 250], "grass1": [76, 156, 74], "grass2": [66, 140, 66], "rumble1": [210, 34, 34], "rumble2": [244, 244, 244], "road1": [110, 110, 118], "road2": [102, 102, 110], "lane": [244, 244, 244], "shoulder": [150, 150, 150], "farCol": [110, 132, 176], "farHi": [240, 246, 255], "nearCol": [36, 92, 64], "nearHi": [52, 116, 78], "ground": [150, 180, 170], "alt1": [76, 156, 74], "alt2": [66, 140, 66], "fogDensity": 4.0, "ambient": 256, "name": "ALPINE PASS"}, {"skyTop": [4, 4, 20], "skyMid": [26, 10, 60], "skyHorizon": [86, 26, 110], "fog": [44, 18, 74], "grass1": [26, 40, 46], "grass2": [22, 34, 40], "rumble1": [255, 40, 200], "rumble2": [0, 210, 255], "road1": [46, 46, 62], "road2": [40, 40, 56], "lane": [255, 226, 110], "shoulder": [70, 70, 90], "farCol": [26, 16, 52], "farHi": [255, 210, 110], "nearCol": [14, 10, 32], "nearHi": [120, 60, 200], "ground": [30, 14, 50], "alt1": [26, 40, 46], "alt2": [22, 34, 40], "fogDensity": 6.0, "ambient": 170, "name": "NEON CITY"}, {"skyTop": [20, 92, 208], "skyMid": [70, 176, 236], "skyHorizon": [196, 238, 246], "fog": [186, 232, 236], "grass1": [62, 176, 96], "grass2": [52, 160, 86], "rumble1": [240, 90, 40], "rumble2": [250, 250, 250], "road1": [122, 118, 124], "road2": [112, 108, 112], "lane": [250, 250, 240], "shoulder": [226, 206, 160], "farCol": [40, 130, 150], "farHi": [150, 215, 200], "nearCol": [30, 120, 76], "nearHi": [130, 206, 110], "ground": [150, 190, 110], "alt1": [240, 216, 150], "alt2": [230, 205, 140], "fogDensity": 3.5, "ambient": 256, "name": "PALM BAY"}, {"skyTop": [16, 24, 84], "skyMid": [44, 100, 150], "skyHorizon": [214, 200, 230], "fog": [200, 216, 238], "grass1": [232, 240, 250], "grass2": [216, 228, 244], "rumble1": [40, 110, 220], "rumble2": [250, 250, 255], "road1": [86, 92, 108], "road2": [78, 84, 100], "lane": [240, 244, 255], "shoulder": [190, 200, 215], "farCol": [84, 108, 164], "farHi": [240, 248, 255], "nearCol": [26, 64, 86], "nearHi": [196, 226, 244], "ground": [200, 214, 232], "alt1": [150, 200, 232], "alt2": [136, 188, 224], "fogDensity": 4.5, "ambient": 256, "name": "GLACIER RUN"}, {"skyTop": [4, 8, 26], "skyMid": [16, 34, 62], "skyHorizon": [92, 70, 66], "fog": [22, 32, 50], "grass1": [40, 46, 54], "grass2": [34, 40, 48], "rumble1": [230, 120, 20], "rumble2": [240, 240, 240], "road1": [54, 56, 66], "road2": [48, 50, 60], "lane": [236, 236, 210], "shoulder": [90, 92, 104], "farCol": [24, 34, 58], "farHi": [255, 176, 76], "nearCol": [18, 26, 40], "nearHi": [96, 112, 140], "ground": [24, 30, 40], "alt1": [12, 40, 76], "alt2": [16, 48, 88], "fogDensity": 5.5, "ambient": 185, "name": "NIGHT HARBOR"}];
+const THEME_KEYS = ['coast', 'alpine', 'city', 'tropic', 'glacier', 'harbor'];
+const THEME_LABELS = ['Côte (coucher de soleil)', 'Montagne (neige, plein jour)', 'Ville (nuit, néons)',
+                      'Baie tropicale (plage, plein soleil)', 'Glacier (nuit polaire, aurore)', 'Port (nuit, grues et conteneurs)'];
+const SONGS = ['SUNSET DRIVE', 'SUMMIT RUSH', 'NEON NIGHTS', 'SEA BREEZE', 'POLAR LIGHTS', 'DOCK RUNNER'];
 const SPR = { PALM: 3, PINE: 4, TREE: 5, BUSH: 6, ROCK: 7, BOARD_A: 8, BOARD_B: 9, BOARD_C: 10, CHEVRON: 11, LAMP: 12,
-              BUILDING_A: 13, BUILDING_B: 14, BUILDING_C: 15, GANTRY: 16 };
+              BUILDING_A: 13, BUILDING_B: 14, BUILDING_C: 15, GANTRY: 16,
+              PARASOL: 17, HUT: 18, LIGHTHOUSE: 19, ICE: 20, SNOWMAN: 21, CONTAINER: 22, CONTAINER2: 23, CRANE: 24,
+              WAREHOUSE: 25, BOARD_D: 26, BOARD_E: 27, BOARD_F: 28 };
 
 const SPEC = {
   straight: { label: 'Ligne droite', args: [{ k: 'len', n: 'Longueur' }, { k: 'hill', n: 'Pente', opt: true }], def: ['MEDIUM', ''] },
@@ -332,12 +335,23 @@ function Rng(seed) {
   return { next, f, range: (a, b) => a + (b - a) * f(), irange: (a, b) => a + (next() % (b - a + 1)) };
 }
 
+// Sol alternatif (sable / glace / eau), comme altGround() en C++.
+function altGround(segs, i, n, theme, maxY) {
+  const p = Math.floor(i * 100 / n);
+  if (theme === 3) return p < 28 || (p >= 50 && p < 72);
+  if (theme === 4) return p >= 25 && p < 70;
+  if (theme === 5) return maxY > 300 && segs[i].y1 > 0.45 * maxY;
+  return false;
+}
+
 // Décor : mêmes règles que scenery() (l'ordre des tirages suit g++).
 function buildScenery(segs, theme, seed) {
   const r = Rng(seed), P = [], n = segs.length;
   const add = (seg, spr, off, flip) => P.push({ seg, spr, offset: off, flip: flip ? 1 : 0 });
   const side = () => r.f() < 0.5 ? -1 : 1;
   const sr = (a, b) => { const s = side(); return s * r.range(a, b); };
+  let maxY = 0; for (const sg of segs) if (sg.y2 > maxY) maxY = sg.y2;
+  for (let i = 0; i < n; i++) if (altGround(segs, i, n, theme, maxY)) segs[i].flags |= 4;
   add(4, SPR.GANTRY, 0, false);
   for (let i = 10; i < n - 5; i += 5) {
     const c = segs[i].curve;
@@ -360,12 +374,104 @@ function buildScenery(segs, theme, seed) {
       if (i % 17 === 0) add(i, SPR.TREE, sr(2.6, 5.0));
       if (i % 11 === 5) add(i, SPR.BUSH, sr(1.4, 3.0));
       if (i % 180 === 90) add(i, SPR.BOARD_B, side() * 1.6);
-    } else {
+    } else if (theme === 2) {
       if (i % 8 === 0) { add(i, SPR.LAMP, -1.12, true); add(i, SPR.LAMP, 1.12, false); }
       if (i % 5 === 0) { const off = -r.range(1.9, 2.4); add(i, SPR.BUILDING_A + r.irange(0, 2), off); }
       if (i % 5 === 2) { const off = r.range(1.9, 2.4); add(i, SPR.BUILDING_A + r.irange(0, 2), off); }
       if (i % 90 === 45) { const off = side() * 1.5; add(i, SPR.BOARD_A + r.irange(0, 2), off); }
       if (i % 23 === 0) add(i, SPR.TREE, side() * 1.45);
+    }
+    if (theme >= 3) {
+      const R = r, A = add, p = Math.floor(i * 100 / n), rsd = () => R.f() < 0.5 ? -1 : 1;
+      if (theme === 3) {
+        const zone = p < 28 ? 0 : p < 50 ? 1 : p < 72 ? 2 : 3;
+        if (zone === 0) {
+          if (i % 7 === 0) { const a = R.f(), f = R.f(); A(i, SPR.PALM, -1.45 - a * 0.6, f < 0.5); }
+          if (i % 7 === 4) { const a = R.f(), f = R.f(); A(i, SPR.PALM, 1.45 + a * 0.6, f < 0.5); }
+          if (i % 15 === 2) { const sd = rsd(), o = R.range(1.5, 2.6); A(i, SPR.PARASOL, sd * o, false); A(i, SPR.PARASOL, sd * (o + 0.75), true); }
+          if (i % 11 === 6) { const sd = rsd(), o = R.range(2.0, 4.5); A(i, SPR.BUSH, sd * o); }
+          if (i % 46 === 20) { const sd = rsd(), o = R.range(2.4, 5.0); A(i, SPR.ROCK, sd * o); }
+          if (i % 90 === 45) { const sd = rsd(); A(i, SPR.BOARD_D, sd * 1.6); }
+        } else if (zone === 1) {
+          if (i % 9 === 0) { const o = R.range(1.9, 2.4), f = R.f(); A(i, SPR.HUT, -o, f < 0.5); }
+          if (i % 9 === 5) { const o = R.range(1.9, 2.4), f = R.f(); A(i, SPR.HUT, o, f < 0.5); }
+          if (i % 6 === 3) { const sd = rsd(), a = R.f(), f = R.f(); A(i, SPR.PALM, sd * (1.4 + a * 0.5), f < 0.5); }
+          if (i % 13 === 4) { const sd = rsd(), o = R.range(1.5, 3.0); A(i, SPR.BUSH, sd * o); }
+          if (i % 60 === 30) { const sd = rsd(), k = R.irange(0, 2); A(i, k === 0 ? SPR.BOARD_A : k === 1 ? SPR.BOARD_B : SPR.BOARD_D, sd * 1.6); }
+        } else if (zone === 2) {
+          if (i % 5 === 0) { const sd = rsd(), o = R.range(1.3, 3.2); A(i, SPR.ROCK, sd * o); }
+          if (i % 5 === 3) { const sd = rsd(), o = R.range(2.2, 4.5); A(i, SPR.ROCK, sd * o); }
+          if (i % 8 === 3) { const sd = rsd(), o = R.range(1.6, 3.0), f = R.f(); A(i, SPR.PALM, sd * o, f < 0.5); }
+          if (i % 12 === 7) { const sd = rsd(), o = R.range(1.4, 2.8); A(i, SPR.BUSH, sd * o); }
+          if (i === Math.floor(n * 61 / 100)) A(i, SPR.LIGHTHOUSE, 3.2, false);
+        } else {
+          if (i % 3 === 0) { const a = R.f(), f = R.f(); A(i, SPR.PALM, -1.3 - a * 0.35, f < 0.5); }
+          if (i % 3 === 1) { const a = R.f(), f = R.f(); A(i, SPR.PALM, 1.3 + a * 0.35, f < 0.5); }
+          if (i % 9 === 2) { const sd = rsd(), o = R.range(1.4, 2.4); A(i, SPR.BUSH, sd * o); }
+          if (i % 70 === 35) { const sd = rsd(); A(i, SPR.BOARD_D, sd * 1.6); }
+        }
+      } else if (theme === 4) {
+        const zone = p < 25 ? 0 : p < 45 ? 1 : p < 70 ? 2 : 3;
+        if (zone === 0) {
+          if (i % 3 === 0) { const o = R.range(1.3, 2.2); A(i, SPR.PINE, -o); }
+          if (i % 3 === 1) { const o = R.range(1.3, 2.2); A(i, SPR.PINE, o); }
+          if (i % 6 === 2) { const sd = rsd(), o = R.range(2.5, 6.0); A(i, SPR.PINE, sd * o); }
+          if (i % 11 === 5) { const sd = rsd(), o = R.range(1.6, 4.0); A(i, SPR.ROCK, sd * o); }
+          if (i % 9 === 4) { const sd = rsd(), o = R.range(1.4, 3.0); A(i, SPR.BUSH, sd * o); }
+          if (i % 90 === 45) { const sd = rsd(); A(i, SPR.BOARD_E, sd * 1.6); }
+        } else if (zone === 1) {
+          if (i % 14 === 0) { const sd = rsd(), o = R.range(1.8, 3.5); A(i, SPR.ICE, sd * o); }
+          if (i % 16 === 8) { const sd = rsd(), o = R.range(3.5, 6.0); A(i, SPR.ICE, sd * o); }
+          if (i % 40 === 20) { const sd = rsd(), o = R.range(1.5, 2.2), f = R.f(); A(i, SPR.SNOWMAN, sd * o, f < 0.5); }
+          if (i % 22 === 10) { const sd = rsd(), o = R.range(2.0, 4.0); A(i, SPR.ROCK, sd * o); }
+          if (i % 100 === 50) { const sd = rsd(); A(i, SPR.BOARD_E, sd * 1.6); }
+        } else if (zone === 2) {
+          if (i % 4 === 0) { const o = R.range(1.35, 2.0), f = R.f(); A(i, SPR.ICE, -o, f < 0.5); }
+          if (i % 4 === 2) { const o = R.range(1.35, 2.0), f = R.f(); A(i, SPR.ICE, o, f < 0.5); }
+          if (i % 9 === 5) { const sd = rsd(), o = R.range(1.6, 3.4); A(i, SPR.ROCK, sd * o); }
+          if (i % 17 === 3) { const sd = rsd(), o = R.range(3.0, 6.0); A(i, SPR.PINE, sd * o); }
+        } else {
+          if (i % 7 === 0) { const o = R.range(1.9, 2.6), f = R.f(); A(i, SPR.HUT, -o, f < 0.5); }
+          if (i % 7 === 4) { const o = R.range(1.9, 2.6), f = R.f(); A(i, SPR.HUT, o, f < 0.5); }
+          if (i % 4 === 1) { const sd = rsd(), o = R.range(1.4, 2.4); A(i, SPR.PINE, sd * o); }
+          if (i % 25 === 12) { const sd = rsd(), o = R.range(1.5, 2.0), f = R.f(); A(i, SPR.SNOWMAN, sd * o, f < 0.5); }
+          if (i % 12 === 6) { const sd = rsd(), o = R.range(1.4, 3.0); A(i, SPR.BUSH, sd * o); }
+          if (i % 70 === 35) { const sd = rsd(); A(i, SPR.BOARD_E, sd * 1.6); }
+        }
+      } else {
+        const wet = altGround(segs, i, n, theme, maxY);
+        const zone = wet ? 2 : p < 24 ? 0 : p < 46 ? 1 : p < 80 ? 3 : 4;
+        const lamps = e => { if (i % e === 0) { A(i, SPR.LAMP, -1.12, true); A(i, SPR.LAMP, 1.12, false); } };
+        const box = (lo, hi, left) => { const k = R.irange(0, 1), o = R.range(lo, hi), f = R.f(); A(i, k ? SPR.CONTAINER2 : SPR.CONTAINER, left ? -o : o, f < 0.5); };
+        if (zone === 0) {
+          lamps(8);
+          if (i % 6 === 0) box(1.7, 2.3, true);
+          if (i % 6 === 3) box(1.7, 2.3, false);
+          if (i % 48 === 20) { const sd = rsd(), o = R.range(2.8, 3.4); A(i, SPR.CRANE, sd * o); }
+          if (i % 80 === 40) { const sd = rsd(); A(i, SPR.BOARD_F, sd * 1.5); }
+        } else if (zone === 1) {
+          lamps(8);
+          if (i % 12 === 0) { const o = R.range(2.4, 3.0), f = R.f(); A(i, SPR.WAREHOUSE, -o, f < 0.5); }
+          if (i % 12 === 6) { const o = R.range(2.4, 3.0), f = R.f(); A(i, SPR.WAREHOUSE, o, f < 0.5); }
+          if (i % 10 === 3) { const sd = rsd(), o = R.range(1.7, 2.2), k = R.irange(0, 1), f = R.f(); A(i, k ? SPR.CONTAINER2 : SPR.CONTAINER, sd * o, f < 0.5); }
+          if (i % 31 === 5) { const sd = rsd(), o = R.range(3.2, 4.0); A(i, SPR.BUILDING_B, sd * o); }
+          if (i % 90 === 45) { const sd = rsd(), k = R.irange(0, 2); A(i, k === 0 ? SPR.BOARD_A : k === 1 ? SPR.BOARD_C : SPR.BOARD_F, sd * 1.5); }
+        } else if (zone === 2) {
+          lamps(6);
+          if (i % 90 === 45) { const sd = rsd(), o = R.range(4.0, 6.0); A(i, SPR.LIGHTHOUSE, sd * o); }
+        } else if (zone === 3) {
+          lamps(8);
+          if (i % 16 === 0) { const o = R.range(2.6, 3.2); A(i, SPR.CRANE, -o); }
+          if (i % 16 === 8) { const o = R.range(2.6, 3.2); A(i, SPR.CRANE, o); }
+          if (i % 5 === 1) { const sd = rsd(); box(1.7, 2.1, sd < 0); }
+          if (i % 100 === 50) { const sd = rsd(); A(i, SPR.BOARD_F, sd * 1.5); }
+        } else {
+          lamps(8);
+          if (i % 5 === 0) { const k = R.irange(0, 2), o = R.range(1.9, 2.4); A(i, SPR.BUILDING_A + k, -o); }
+          if (i % 5 === 2) { const k = R.irange(0, 2), o = R.range(1.9, 2.4); A(i, SPR.BUILDING_A + k, o); }
+          if (i % 90 === 45) { const sd = rsd(), k = R.irange(0, 2); A(i, SPR.BOARD_A + k, sd * 1.5); }
+        }
+      }
     }
   }
   P.sort((a, b) => a.seg - b.seg);   // tri stable
@@ -405,18 +511,48 @@ function buildBackdrop(theme, bgSeed) {
   const r = Rng(bgSeed), tbl = []; for (let i = 0; i < 64; i++) tbl.push(r.f());
   const noise1 = x => { const i = Math.floor(x); let f = x - i; const a = tbl[i % 64], b = tbl[(i + 1) % 64]; f = f * f * (3 - 2 * f); return a + (b - a) * f; };
   const far = new Uint8Array(BG_W), near = new Uint8Array(BG_W);
+  const isC = [], isW = [], isH = [];
+  for (let k = 0; k < 6; k++) {
+    isC.push((k * 171 + Math.floor(tbl[k] * 90)) % BG_W);
+    isW.push(40 + tbl[k + 8] * 60);
+    isH.push(14 + tbl[k + 16] * 34);
+  }
   for (let x = 0; x < BG_W; x++) {
     const u = x / BG_W * 64; let fh, nh;
     if (theme === 2) {
       const br = Rng(Math.floor(x / 18) * 7919 + 3);
       fh = 18 + br.f() * 52; if (br.f() < 0.2) fh += 30;
+    } else if (theme === 3) {
+      fh = 5;
+      for (let k = 0; k < 6; k++) {
+        let d = Math.abs(x - isC[k]); if (d > BG_W / 2) d = BG_W - d;
+        if (d < isW[k]) { const q = d / isW[k], bump = isH[k] * (1 - q) * (1 - q * 0.4); if (5 + bump > fh) fh = 5 + bump; }
+      }
+      fh += noise1(u * 2.0 + 7) * 3;
+    } else if (theme === 4) {
+      const n0 = noise1(u * 0.25) * 0.55 + noise1(u * 0.6 + 13) * 0.3 + noise1(u * 2.0 + 7) * 0.15;
+      const ridge = 1 - Math.abs(2 * n0 - 1);
+      fh = 12 + ridge * ridge * 62;
+    } else if (theme === 5) {
+      const br = Rng(Math.floor(x / 22) * 6361 + 17);
+      fh = 10 + br.f() * 30; if (br.f() < 0.15) fh += 28;
     } else {
       fh = noise1(u * 0.25) * 0.55 + noise1(u * 0.6 + 13) * 0.3 + noise1(u * 2.0 + 7) * 0.15;
       fh = theme === 1 ? 14 + fh * fh * 110 : 8 + fh * 52;
     }
     far[x] = Math.min(fh, 120);
     if (theme === 2) { const br = Rng(Math.floor((x + 7) / 30) * 104729 + 11); nh = 6 + br.f() * 30; }
-    else {
+    else if (theme === 3) {
+      nh = 6 + noise1(u * 1.3 + 31) * 6 + noise1(u * 5.0 + 3) * 3;
+      const b = Math.floor(x / 128), pc = 40 + (b * 37) % 48, d = Math.abs(x % 128 - pc);
+      if (d < 9 && (b * 7 + 3) % 5 !== 0) nh += (9 - d) * 1.5;
+    } else if (theme === 4) {
+      const m = x % 14, tri = m < 7 ? m : 14 - m;
+      nh = 8 + noise1(u * 1.3 + 31) * 10 + tri * 2;
+    } else if (theme === 5) {
+      const br = Rng(Math.floor((x + 5) / 16) * 30011 + 5);
+      nh = 4 + 5 * Math.floor(br.f() * 4.99); if (br.f() < 0.2) nh = 3;
+    } else {
       nh = noise1(u * 1.3 + 31) * 0.7 + noise1(u * 5.0 + 3) * 0.3;
       nh = 4 + nh * (theme === 1 ? 34 : 22);
       if (theme === 1) nh += ((x * 13) % 7) * 0.6;
@@ -475,7 +611,7 @@ function parseTrk(text) {
       if (KEYS.includes(w)) {
         const val = toks.slice(1).join(' ');
         if (w === 'name') meta.name = val.toUpperCase();
-        else if (w === 'theme') { const t = THEME_KEYS.indexOf(val.toLowerCase()); meta.theme = t >= 0 ? t : (/^[0-2]$/.test(val) ? +val : 0); if (t < 0 && !/^[0-2]$/.test(val)) errors.push('ligne ' + (ln + 1) + ' : thème inconnu « ' + val + ' »'); }
+        else if (w === 'theme') { const t = THEME_KEYS.indexOf(val.toLowerCase()); meta.theme = t >= 0 ? t : (/^[0-5]$/.test(val) ? +val : 0); if (t < 0 && !/^[0-5]$/.test(val)) errors.push('ligne ' + (ln + 1) + ' : thème inconnu « ' + val + ' »'); }
         else meta[w] = Math.max(0, parseInt(val, 10) || 0);
         return;
       }
@@ -543,7 +679,7 @@ function analyze(model, tr) {
 // =====================================================================
 //                              INTERFACE
 // =====================================================================
-const PRESETS = [{"name": "SUNSET COAST", "text": "# Fast sweepers along the sea. A gentle first circuit: wide bends, a few small hills.\nname SUNSET COAST\ntheme coast\nmusic 0\nseed 1234\nbgseed 99\n\nstraight SHORT\ncurve MEDIUM EASY\nroad SHORT MEDIUM SHORT 0 LOW\ncurve MEDIUM MED -LOW\nstraight MEDIUM\nscurves MED\ncurve LONG EASY MED\nroad MEDIUM MEDIUM MEDIUM -EASY -MED\nstraight LONG\ncurve MEDIUM HARD\nroad SHORT SHORT SHORT 0 LOW\ncurve MEDIUM MED -LOW\ncurve SHORT -MED\ncurve MEDIUM MED\ndownhill MEDIUM\nstraight SHORT\n"}, {"name": "ALPINE PASS", "text": "# Big hills, hairpins and a bumpy descent. Brake before the crests.\nname ALPINE PASS\ntheme alpine\nmusic 1\nseed 1311\nbgseed 130\n\nstraight SHORT\nroad MEDIUM MEDIUM MEDIUM 0 HIGH\ncurve MEDIUM HARD LOW\nroad SHORT SHORT SHORT 0 -MED\ncurve MEDIUM -MED MED\ncurve SHORT HARD\nroad LONG SHORT MEDIUM 0 -HIGH\nscurves HARD\nbumps\ncurve MEDIUM MED HIGH\ncurve MEDIUM HARD -MED\nroad MEDIUM MEDIUM SHORT -EASY LOW\ncurve SHORT HARD -LOW\ndownhill LONG\nstraight SHORT\n"}, {"name": "NEON CITY", "text": "# Night race: long boulevards that end in tight corners.\nname NEON CITY\ntheme city\nmusic 2\nseed 1388\nbgseed 161\n\nstraight MEDIUM\nroad 10 40 10 HARD 0\nstraight LONG\nroad 10 40 10 HARD 0\nbumps\nroad 10 30 10 -HARD 0\nroad 10 50 10 HARD LOW\nstraight MEDIUM -LOW\nroad 10 40 10 HARD 0\nscurves MED\nstraight LONG\nroad 10 40 10 HARD 0\nroad SHORT SHORT SHORT -MED 0\nroad SHORT SHORT SHORT HARD 0\ndownhill SHORT\nstraight MEDIUM\n"}, {"name": "PALM BAY", "text": "# Technical seaside town circuit: quick esses, a climbing hairpin, a seafront straight and a harbour corner.\nname PALM BAY\ntheme coast\nmusic 0\nseed 4217\nbgseed 58\n\nstraight MEDIUM                       # grid and first corner\ncurve SHORT MED\nroad 10 10 10 -HARD 0                 # esses: left-right-left-right\nroad 10 10 10 HARD 0\nroad 10 10 10 -HARD 0\nroad 10 10 10 HARD 0\nstraight SHORT LOW                    # up to the bridge\ncurve MEDIUM HARD LOW                 # climbing hairpin\nroad SHORT MEDIUM SHORT 0 -MED        # long run down\ncurve SHORT -EASY\ncurve MEDIUM MED\nstraight MEDIUM\nroad 15 15 15 HARD 0                  # quick right\nroad 15 15 15 -HARD 0                 # snap back left\ncurve LONG EASY LOW                   # big sweeper along the beach\nroad SHORT SHORT SHORT -MED -LOW\nroad SHORT SHORT SHORT 0 MED          # blind crest on the seafront...\nroad SHORT SHORT SHORT 0 -MED         # ...and straight back down\nstraight LONG                         # flat-out seafront straight\nroad 12 20 12 HARD 0                  # harbour corner\ncurve SHORT -MED\ncurve MEDIUM MED\ncurve SHORT HARD\ncurve MEDIUM -EASY                    # gentle left onto the grid\nstraight SHORT\n"}, {"name": "GLACIER RUN", "text": "# Mountain roller coaster: blind crests, fast sweepers and a long downhill finish.\nname GLACIER RUN\ntheme alpine\nmusic 1\nseed 7351\nbgseed 212\n\nstraight MEDIUM\nroad MEDIUM SHORT MEDIUM 0 MED        # first climb\ncurve MEDIUM EASY -LOW\ncurve SHORT MED\nbumps                                 # rollers\ncurve MEDIUM HARD MED\nroad SHORT SHORT SHORT -MED -HIGH     # plunge\nroad SHORT MEDIUM SHORT 0 LOW\ncurve MEDIUM -MED\ncurve MEDIUM MED LOW\nstraight MEDIUM HIGH\ncurve MEDIUM HARD -MED\ncurve SHORT -HARD\ncurve SHORT HARD\nroad LONG SHORT MEDIUM EASY -HIGH\nstraight SHORT\ndownhill LONG\nstraight LONG                         # long finish straight\n"}, {"name": "NIGHT HARBOR", "text": "# Night race around the docks: flat-out straights, a bridge, a blind crest and a tight final chicane.\nname NIGHT HARBOR\ntheme city\nmusic 2\nseed 9034\nbgseed 305\n\nstraight LONG                         # start straight\ncurve MEDIUM MED\nstraight SHORT\nroad 12 30 12 HARD 0                  # container corner\nstraight MEDIUM LOW\nroad MEDIUM SHORT MEDIUM 0 -LOW       # crest over the lock\ncurve MEDIUM EASY\nroad MEDIUM SHORT MEDIUM 0 MED       # the bridge: up...\nstraight SHORT                        # ...flat top...\nroad MEDIUM SHORT MEDIUM 0 -MED       # ...and down\nstraight LONG                         # quay straight\nroad 10 25 10 -HARD 0\nroad 10 40 10 HARD 0\ncurve LONG EASY                       # fast sweeper\nstraight MEDIUM\ncurve MEDIUM MED\nroad SHORT SHORT SHORT -MED 0\nroad SHORT MEDIUM SHORT HARD 0\nstraight MEDIUM\nroad 8 8 8 -HARD 0                    # final chicane\nroad 8 8 8 HARD 0\nroad 8 8 8 -HARD 0\nstraight SHORT\n"}];
+const PRESETS = [{"name": "SUNSET COAST", "text": "# Fast sweepers along the sea. A gentle first circuit: wide bends, a few small hills.\nname SUNSET COAST\ntheme coast\nmusic 0\nseed 1234\nbgseed 99\n\nstraight SHORT\ncurve MEDIUM EASY\nroad SHORT MEDIUM SHORT 0 LOW\ncurve MEDIUM MED -LOW\nstraight MEDIUM\nscurves MED\ncurve LONG EASY MED\nroad MEDIUM MEDIUM MEDIUM -EASY -MED\nstraight LONG\ncurve MEDIUM HARD\nroad SHORT SHORT SHORT 0 LOW\ncurve MEDIUM MED -LOW\ncurve SHORT -MED\ncurve MEDIUM MED\ndownhill MEDIUM\nstraight SHORT\n"}, {"name": "ALPINE PASS", "text": "# Big hills, hairpins and a bumpy descent. Brake before the crests.\nname ALPINE PASS\ntheme alpine\nmusic 1\nseed 1311\nbgseed 130\n\nstraight SHORT\nroad MEDIUM MEDIUM MEDIUM 0 HIGH\ncurve MEDIUM HARD LOW\nroad SHORT SHORT SHORT 0 -MED\ncurve MEDIUM -MED MED\ncurve SHORT HARD\nroad LONG SHORT MEDIUM 0 -HIGH\nscurves HARD\nbumps\ncurve MEDIUM MED HIGH\ncurve MEDIUM HARD -MED\nroad MEDIUM MEDIUM SHORT -EASY LOW\ncurve SHORT HARD -LOW\ndownhill LONG\nstraight SHORT\n"}, {"name": "NEON CITY", "text": "# Night race: long boulevards that end in tight corners.\nname NEON CITY\ntheme city\nmusic 2\nseed 1388\nbgseed 161\n\nstraight MEDIUM\nroad 10 40 10 HARD 0\nstraight LONG\nroad 10 40 10 HARD 0\nbumps\nroad 10 30 10 -HARD 0\nroad 10 50 10 HARD LOW\nstraight MEDIUM -LOW\nroad 10 40 10 HARD 0\nscurves MED\nstraight LONG\nroad 10 40 10 HARD 0\nroad SHORT SHORT SHORT -MED 0\nroad SHORT SHORT SHORT HARD 0\ndownhill SHORT\nstraight MEDIUM\n"}, {"name": "PALM BAY", "text": "# Technical seaside town circuit: quick esses, a climbing hairpin, a seafront straight and a harbour corner.\nname PALM BAY\ntheme tropic\nmusic 3\nseed 4217\nbgseed 58\n\nstraight MEDIUM                       # grid and first corner\ncurve SHORT MED\nroad 10 10 10 -HARD 0                 # esses: left-right-left-right\nroad 10 10 10 HARD 0\nroad 10 10 10 -HARD 0\nroad 10 10 10 HARD 0\nstraight SHORT LOW                    # up to the bridge\ncurve MEDIUM HARD LOW                 # climbing hairpin\nroad SHORT MEDIUM SHORT 0 -MED        # long run down\ncurve SHORT -EASY\ncurve MEDIUM MED\nstraight MEDIUM\nroad 15 15 15 HARD 0                  # quick right\nroad 15 15 15 -HARD 0                 # snap back left\ncurve LONG EASY LOW                   # big sweeper along the beach\nroad SHORT SHORT SHORT -MED -LOW\nroad SHORT SHORT SHORT 0 MED          # blind crest on the seafront...\nroad SHORT SHORT SHORT 0 -MED         # ...and straight back down\nstraight LONG                         # flat-out seafront straight\nroad 12 20 12 HARD 0                  # harbour corner\ncurve SHORT -MED\ncurve MEDIUM MED\ncurve SHORT HARD\ncurve MEDIUM -EASY                    # gentle left onto the grid\nstraight SHORT\n"}, {"name": "GLACIER RUN", "text": "# Mountain roller coaster: blind crests, fast sweepers and a long downhill finish.\nname GLACIER RUN\ntheme glacier\nmusic 4\nseed 7351\nbgseed 212\n\nstraight MEDIUM\nroad MEDIUM SHORT MEDIUM 0 MED        # first climb\ncurve MEDIUM EASY -LOW\ncurve SHORT MED\nbumps                                 # rollers\ncurve MEDIUM HARD MED\nroad SHORT SHORT SHORT -MED -HIGH     # plunge\nroad SHORT MEDIUM SHORT 0 LOW\ncurve MEDIUM -MED\ncurve MEDIUM MED LOW\nstraight MEDIUM HIGH\ncurve MEDIUM HARD -MED\ncurve SHORT -HARD\ncurve SHORT HARD\nroad LONG SHORT MEDIUM EASY -HIGH\nstraight SHORT\ndownhill LONG\nstraight LONG                         # long finish straight\n"}, {"name": "NIGHT HARBOR", "text": "# Night race around the docks: flat-out straights, a bridge, a blind crest and a tight final chicane.\nname NIGHT HARBOR\ntheme harbor\nmusic 5\nseed 9034\nbgseed 305\n\nstraight LONG                         # start straight\ncurve MEDIUM MED\nstraight SHORT\nroad 12 30 12 HARD 0                  # container corner\nstraight MEDIUM LOW\nroad MEDIUM SHORT MEDIUM 0 -LOW       # crest over the lock\ncurve MEDIUM EASY\nroad MEDIUM SHORT MEDIUM 0 MED       # the bridge: up...\nstraight SHORT                        # ...flat top...\nroad MEDIUM SHORT MEDIUM 0 -MED       # ...and down\nstraight LONG                         # quay straight\nroad 10 25 10 -HARD 0\nroad 10 40 10 HARD 0\ncurve LONG EASY                       # fast sweeper\nstraight MEDIUM\ncurve MEDIUM MED\nroad SHORT SHORT SHORT -MED 0\nroad SHORT MEDIUM SHORT HARD 0\nstraight MEDIUM\nroad 8 8 8 -HARD 0                    # final chicane\nroad 8 8 8 HARD 0\nroad 8 8 8 -HARD 0\nstraight SHORT\n"}];
 const $ = id => document.getElementById(id);
 const LOOK_BACK = 1800;   // la caméra se place un peu avant le tronçon choisi
 let model = null, track = null, sel = 0, camZ = 0, playing = false, lastT = 0;
@@ -767,7 +903,8 @@ function render3d() {
     for (let y = Math.max(0, baseY - h); y < baseY; y++) {
       const alt = baseY - y; let c = lerpC(th.farCol, th.fog, clamp(170 - alt * 2.2, 0, 170));
       if (model.meta.theme === 1 && alt > 58 + (hash32(col) % 6)) c = th.farHi;
-      else if (model.meta.theme === 2 && alt > 3 && alt < h - 2 && ((col >> 1) & 1) === 0 && ((y + 1) % 4) === 0 && hash32(col * 131 + y) % 5 === 0) c = th.farHi;
+      else if (model.meta.theme === 4 && alt > 38 + (hash32(col) % 6)) c = th.farHi;
+      else if ((model.meta.theme === 2 || model.meta.theme === 5) && alt > 3 && alt < h - 2 && ((col >> 1) & 1) === 0 && ((y + 1) % 4) === 0 && hash32(col * 131 + y) % 5 === 0) c = th.farHi;
       else if (alt > h - 3) c = lerpC(c, th.farHi, 140);
       buf32[y * SW + x] = px32(c);
     }
@@ -810,7 +947,7 @@ function render3d() {
 }
 function drawRows(ps, maxy, th, sg) {
   const light = (Math.floor(ps.idx / RUMBLE) & 1) === 0, f = ps.fog;
-  const grass = px32(lerpC(light ? th.grass1 : th.grass2, th.fog, f)), rumble = px32(lerpC(light ? th.rumble1 : th.rumble2, th.fog, f));
+  const altG = sg.flags & 4, grass = px32(lerpC(light ? (altG ? th.alt1 : th.grass1) : (altG ? th.alt2 : th.grass2), th.fog, f)), rumble = px32(lerpC(light ? th.rumble1 : th.rumble2, th.fog, f));
   const road = px32(lerpC(light ? th.road1 : th.road2, th.fog, f)), lane = px32(lerpC(th.lane, th.fog, f)), shoulder = px32(lerpC(th.shoulder, th.fog, f));
   const start = sg.flags & 1, chkA = px32(lerpC([250, 250, 250], th.fog, f)), chkB = px32(lerpC([20, 20, 24], th.fog, f));
   let yTop = Math.ceil(ps.y2), yBot = Math.ceil(ps.y1); if (yTop < 0) yTop = 0; if (yBot > maxy) yBot = maxy; if (yBot > SH) yBot = SH;
@@ -833,7 +970,9 @@ function drawRows(ps, maxy, th, sg) {
 }
 // dimensions des sprites : [largeur monde, rapport h/l]
 const SPR_DIM = { 3: [1400, 1.76], 4: [1150, 2.05], 5: [1700, 1.18], 6: [1000, 0.55], 7: [1000, 0.71], 8: [2300, 0.76], 9: [2300, 0.76], 10: [2300, 0.76],
-  11: [800, 1], 12: [950, 3], 13: [3600, 1.97], 14: [2880, 2.46], 15: [3960, 1.79], 16: [5280, 0.44] };
+  11: [800, 1], 12: [950, 3], 13: [3600, 1.97], 14: [2880, 2.46], 15: [3960, 1.79], 16: [5280, 0.44],
+  17: [900, 1.25], 18: [1700, 0.84], 19: [1000, 4.11], 20: [1300, 1.46], 21: [650, 1.46], 22: [2200, 0.84], 23: [2200, 0.59],
+  24: [3000, 1.35], 25: [4200, 0.5], 26: [2300, 0.76], 27: [2300, 0.76], 28: [2300, 0.76] };
 function drawProp(g, ps, pr, th) {
   const dim = SPR_DIM[pr.spr]; if (!dim) return;
   const sc = ps.s1, dw = dim[0] * sc * SW / 2; if (dw < 1.2) return;
@@ -853,9 +992,20 @@ function drawProp(g, ps, pr, th) {
     case SPR.ROCK: tri([[0.1, 1], [0.25, 0.3], [0.55, 0], [0.85, 0.35], [0.95, 1]], [130, 130, 142]); tri([[0.3, 0.6], [0.55, 0.1], [0.7, 0.6]], [160, 160, 170]); break;
     case SPR.BOARD_A: case SPR.BOARD_B: case SPR.BOARD_C: { const col = pr.spr === 8 ? [210, 40, 60] : pr.spr === 9 ? [40, 110, 220] : [240, 150, 30];
       rect(0.18, 0.55, 0.05, 0.45, [90, 90, 100]); rect(0.77, 0.55, 0.05, 0.45, [90, 90, 100]); rect(0, 0, 1, 0.62, [250, 250, 250]); rect(0.04, 0.06, 0.92, 0.5, col); rect(0.12, 0.2, 0.76, 0.1, [250, 250, 250]); rect(0.2, 0.38, 0.5, 0.06, [250, 230, 120]); break; }
+    case SPR.PARASOL: rect(0.48, 0.3, 0.04, 0.7, [200, 200, 210]); ell(0.5, 0.38, 0.5, 0.36, [238, 60, 60]); rect(0.1, 0.38, 0.8, 0.02, [255, 255, 255]); ell(0.5, 0.34, 0.14, 0.3, [252, 252, 252]); break;
+    case SPR.HUT: rect(0.1, 0.5, 0.8, 0.5, model.meta.theme === 4 ? [150, 98, 60] : [246, 156, 74]); tri([[0, 0.55], [0.5, 0.05], [1, 0.55]], model.meta.theme === 4 ? [235, 244, 252] : [196, 154, 72]); rect(0.44, 0.68, 0.17, 0.32, [90, 60, 40]); rect(0.17, 0.62, 0.2, 0.14, [60, 50, 40]); break;
+    case SPR.LIGHTHOUSE: tri([[0.3, 1], [0.4, 0.25], [0.6, 0.25], [0.7, 1]], [248, 248, 252]); for (let k = 0; k < 4; k++) tri([[0.33 - k * 0.0, 0.3 + k * 0.17 + 0.07], [0.4, 0.3 + k * 0.17], [0.6, 0.3 + k * 0.17], [0.67, 0.3 + k * 0.17 + 0.07]], [214, 40, 48]); rect(0.35, 0.14, 0.3, 0.1, [150, 222, 255]); tri([[0.3, 0.14], [0.5, 0.04], [0.7, 0.14]], [214, 40, 48]); break;
+    case SPR.ICE: tri([[0.05, 1], [0.12, 0.45], [0.27, 0.5], [0.4, 1]], [112, 172, 226]); tri([[0.3, 1], [0.5, 0], [0.7, 1]], [172, 224, 252]); tri([[0.55, 1], [0.75, 0.22], [0.9, 1]], [112, 172, 226]); break;
+    case SPR.SNOWMAN: ell(0.5, 0.78, 0.32, 0.2, [240, 246, 255]); ell(0.5, 0.5, 0.24, 0.15, [240, 246, 255]); ell(0.5, 0.27, 0.18, 0.12, [240, 246, 255]); rect(0.3, 0.38, 0.4, 0.05, [220, 40, 50]); rect(0.4, 0.04, 0.2, 0.1, [30, 30, 40]); break;
+    case SPR.CONTAINER: case SPR.CONTAINER2: { const rows = pr.spr === 22 ? 3 : 2, cols = [[196, 56, 46], [46, 100, 174], [224, 156, 44], [52, 144, 100]];
+      for (let k = 0; k < rows; k++) rect(0.05, 1 - (k + 1) / rows * 0.95, 0.86, 0.95 / rows - 0.02, cols[(hash32(pr.seg + pr.spr * 3 + k) % 4)]); break; }
+    case SPR.CRANE: rect(0.3, 0.3, 0.04, 0.7, [232, 124, 34]); rect(0.66, 0.3, 0.04, 0.7, [232, 124, 34]); rect(0.3, 0.55, 0.4, 0.03, [160, 78, 22]); rect(0, 0.3, 0.95, 0.05, [232, 124, 34]); tri([[0.5, 0.1], [0.3, 0.32], [0.7, 0.32]], [232, 124, 34]); rect(0.44, 0.44, 0.12, 0.05, [255, 226, 130]); break;
+    case SPR.WAREHOUSE: rect(0.03, 0.35, 0.94, 0.65, [76, 88, 108]); tri([[0, 0.38], [0.5, 0.05], [1, 0.38]], [46, 52, 66]); rect(0.35, 0.52, 0.3, 0.48, [255, 196, 96]); rect(0.08, 0.42, 0.1, 0.08, [140, 212, 255]); rect(0.82, 0.42, 0.1, 0.08, [140, 212, 255]); break;
+    case SPR.BOARD_D: case SPR.BOARD_E: case SPR.BOARD_F: { const col = pr.spr === 26 ? [0, 150, 190] : pr.spr === 27 ? [20, 56, 120] : [10, 20, 44];
+      rect(0.18, 0.55, 0.05, 0.45, [90, 90, 100]); rect(0.77, 0.55, 0.05, 0.45, [90, 90, 100]); rect(0, 0, 1, 0.62, [250, 250, 250]); rect(0.04, 0.06, 0.92, 0.5, col); rect(0.12, 0.2, 0.76, 0.1, pr.spr === 28 ? [255, 200, 80] : [250, 250, 250]); rect(0.2, 0.38, 0.5, 0.06, [250, 230, 120]); break; }
     case SPR.CHEVRON: rect(0, 0, 1, 1, [20, 20, 24]); rect(0.06, 0.06, 0.88, 0.88, [250, 210, 40]); { const s = pr.flip ? -1 : 1, o = pr.flip ? 1 : 0; tri([[o + s * 0.22, 0.2], [o + s * 0.62, 0.5], [o + s * 0.22, 0.8], [o + s * 0.34, 0.5]], [20, 20, 24]); } break;
     case SPR.LAMP: rect(0.46, 0.1, 0.08, 0.9, [110, 110, 124]); rect(pr.flip ? 0.2 : 0.46, 0.08, 0.34, 0.05, [110, 110, 124]);
-      if (model.meta.theme === 2) { g.fillStyle = 'rgba(255,220,130,.9)'; g.beginPath(); g.arc(x + (pr.flip ? 0.24 : 0.78) * dw, y + 0.12 * dh, Math.max(1.5, dw * 0.22), 0, 7); g.fill(); } break;
+      if (model.meta.theme === 2 || model.meta.theme === 5) { g.fillStyle = 'rgba(255,220,130,.9)'; g.beginPath(); g.arc(x + (pr.flip ? 0.24 : 0.78) * dw, y + 0.12 * dh, Math.max(1.5, dw * 0.22), 0, 7); g.fill(); } break;
     case SPR.BUILDING_A: case SPR.BUILDING_B: case SPR.BUILDING_C: { rect(0, 0.12, 1, 0.88, [26, 22, 46]); rect(0, 0.12, 1, 0.012, [120, 60, 200]);
       const cols = pr.spr === 13 ? 6 : pr.spr === 14 ? 4 : 7, rows = 12;
       for (let cI = 0; cI < cols; cI++) for (let rI = 0; rI < rows; rI++) if (hash32(pr.seg * 7 + cI * 13 + rI * 31 + pr.spr) % 3 === 0)

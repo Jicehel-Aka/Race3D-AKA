@@ -8,7 +8,9 @@ constexpr float ROAD_W = 2000.0f;     // half width of the road
 constexpr int   RUMBLE_LEN = 3;       // segments per rumble strip colour
 constexpr int   LANES = 3;
 
-enum ThemeId { THEME_COAST = 0, THEME_ALPINE = 1, THEME_CITY = 2 };
+// Looks: each one has its own sky, palette, backdrop, sprites and scenery recipe.
+enum ThemeId { THEME_COAST = 0, THEME_ALPINE = 1, THEME_CITY = 2,
+               THEME_TROPIC = 3, THEME_GLACIER = 4, THEME_HARBOR = 5, THEME_COUNT = 6 };
 
 struct Theme {
     const char* name;
@@ -18,6 +20,7 @@ struct Theme {
     uint16_t grass1, grass2, rumble1, rumble2, road1, road2, lane, shoulder;
     uint16_t farCol, farHi, nearCol, nearHi, ground;
     int ambient;          // 256 = full daylight
+    uint16_t alt1, alt2;  // alternate ground (sand, ice, water...) for segments flagged SEGF_ALT
 };
 
 struct Seg {
@@ -27,7 +30,7 @@ struct Seg {
     uint8_t propCount;
     uint8_t flags;        // SEGF_*
 };
-enum { SEGF_START = 1, SEGF_TUNNEL = 2 };
+enum { SEGF_START = 1, SEGF_TUNNEL = 2, SEGF_ALT = 4 };
 
 struct Prop {
     uint16_t seg;
@@ -65,7 +68,7 @@ struct Track {
     static float floorf_(float v) { int i = (int)v; return (float)(v < i ? i - 1 : i); }
 };
 
-extern const Theme g_themes[3];
+extern const Theme g_themes[THEME_COUNT];
 
 // ---- circuits ---------------------------------------------------------------
 // A circuit is a small text script (see docs/CIRCUITS.md) plus a few settings.

@@ -1,4 +1,4 @@
-// music.cpp - the three circuit themes.
+// music.cpp - the circuit themes (one song per look).
 // Lead: one token per 16th note. "-" holds the previous note, "." is silence.
 // Chords: one per bar; the bass and the arpeggio are generated from them.
 // Drums: k kick, s snare, h hat, x kick+hat, o snare+hat, . nothing.
@@ -13,7 +13,8 @@ namespace {
 struct SongText {
     const char* title;
     int bpm;
-    int bassStyle;       // 0 octave eighths, 1 root-fifth eighths, 2 sixteenth pulse
+    int bassStyle;       // 0 octave eighths, 1 root-fifth eighths, 2 sixteenth pulse,
+                         // 3 syncopated, 4 slow pad, 5 driving eighths
     int leadTranspose;
     const char* chords;
     const char* lead;
@@ -57,7 +58,44 @@ const SongText kSongs[SONG_COUNT] = {
       "A5 . C6 . E6 - - - D6 . C6 . B5 . A5 . |"
       "B5 - - - - - - - D#5 - - - F#5 - - .",
       "k.h.o.hkk.h.o.hh" },
+    // Palm Bay - sunny, bouncy, syncopated bass, G major
+    { "SEA BREEZE", 128, 3, 0,
+      "G Em C D G Em Am D",
+      "B5 - D6 - - B5 - G5 - - A5 - B5 - - . |"
+      "G5 - - E5 - G5 - - B5 - A5 - G5 - E5 - |"
+      "E5 - G5 - - E5 - C5 - - D5 - E5 - - . |"
+      "F#5 - A5 - - F#5 - D5 - E5 - F#5 - A5 - - |"
+      "D6 - - B5 - D6 - - E6 - D6 - B5 - G5 - |"
+      "B5 - - G5 - B5 - - A5 - G5 - E5 - - . |"
+      "C6 - - A5 - C6 - E6 - - D6 - C6 - A5 - |"
+      "A5 - - F#5 - A5 - D6 - - C#6 - A5 - - .",
+      "x..hk.o.x..hk.o." },
+    // Glacier Run - wide open and shimmering, D minor, slow bass pads
+    { "POLAR LIGHTS", 96, 4, -12,
+      "Dm Bb F C Dm Bb Gm A",
+      "A5 - - - - - - - F5 - - - - - D5 - |"
+      "D6 - - - - - - - C6 - - - A5 - - - |"
+      "C6 - - - - - A5 - F5 - - - A5 - C6 - |"
+      "E6 - - - - - - - D6 - - - C6 - - . |"
+      "A5 - - - D6 - - - F6 - - - E6 - D6 - |"
+      "D6 - - - - - C6 - Bb5 - - - A5 - - - |"
+      "G5 - - - Bb5 - - - D6 - - - G6 - - - |"
+      "E6 - - - - - - - C#6 - - - A5 - - .",
+      "k...h.h.s...h.hk" },
+    // Night Harbor - dark industrial pulse, F# minor
+    { "DOCK RUNNER", 118, 5, -12,
+      "F#m D A E F#m D Bm C#",
+      "F#5 . . F#5 . . A5 . F#5 . . . E5 . . . |"
+      "D5 . . D5 . . F#5 . D5 . . . C#5 . . . |"
+      "E5 . . E5 . . A5 . E5 . . . C#5 . . . |"
+      "B4 . . B4 . . E5 . B4 . . . G#4 . . . |"
+      "F#5 . A5 . C#6 . . . A5 . F#5 . E5 - - . |"
+      "D5 . F#5 . A5 . . . F#5 . D5 . C#5 - - . |"
+      "D6 - - - C#6 . B5 . . . A5 . F#5 - - . |"
+      "E5 . G#5 . C#6 - - - B5 . G#5 . F5 - - .",
+      "x.h.o.h.x.h.o.hk" },
 };
+
 
 int noteNumber(const char* t) {   // "C#5" -> 73
     static const int base[7] = { 9, 11, 0, 2, 4, 5, 7 };   // A B C D E F G
@@ -129,6 +167,18 @@ void compile(const SongText& src, Sequence& seq) {
             if ((st & 1) == 0) b = (uint8_t)(bassRoot + pat[st / 2]);
             break;
         }
+        case 3: {                                   // syncopated, island style
+            if (st == 0 || st == 3 || st == 6 || st == 8 || st == 11 || st == 14)
+                b = (uint8_t)(bassRoot + (st == 3 ? 12 : (st == 6 || st == 14) ? 7 : 0));
+            break;
+        }
+        case 4:                                     // slow pad: root, then the fifth
+            if (st == 0) b = (uint8_t)bassRoot;
+            else if (st == 8) b = (uint8_t)(bassRoot + 7);
+            break;
+        case 5:                                     // driving eighths with a fifth on the turnaround
+            if ((st & 1) == 0) b = (uint8_t)(bassRoot + (((st & 7) == 6) ? 7 : 0));
+            break;
         default: b = (uint8_t)(bassRoot + ((st == 14) ? 12 : 0)); break;
         }
         seq.bass[s] = b;
