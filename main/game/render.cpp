@@ -557,13 +557,8 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
     float sv = c.steerVis;
     int amb = th.ambient < 256 ? th.ambient + 40 : 256;
     if (car_art_ready()) {
-        // true colour picture: straight, mild or strong lean in turns / after an impact
-        int dir = 0; float amp = 0;
-        if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) { dir = r.spinDir < 0 ? -1 : 1; amp = 11; }
-        else if (sv < -0.9f) { dir = -1; amp = 11; }
-        else if (sv < -0.3f) { dir = -1; amp = 5; }
-        else if (sv > 0.9f) { dir = 1; amp = 11; }
-        else if (sv > 0.3f) { dir = 1; amp = 5; }
+        // true colour rear view; no deformation in turns (a three-quarter picture set can be plugged in here later)
+        const int dir = 0; const float amp = 0;
         int dhA = dw * CAR_ART_H / CAR_ART_W;
         int ya = y + dh * 52 / 58 - dhA;                     // wheels on the ground line of the old sprites
         // ground shadow
