@@ -274,7 +274,7 @@ struct V3 { float x, y, z; };
 enum { MT_BODY = 0, MT_GLASS, MT_TYRE, MT_FLAT };
 enum { PT_NONE = 0, PT_BODY, PT_CABIN, PT_WING, PT_WHEEL, PT_GLASS, PT_RIM };
 struct Tri { V3 p[3]; uint8_t mat, flat, part; float bias; bool smooth; V3 n[3]; };
-static Tri s_tri[1400];
+static Tri* s_tri = nullptr;       // allocated in PSRAM while a 3D car view is built (too big for internal RAM)
 static int s_nt;
 
 static void add_tri(V3 a, V3 b, V3 c, uint8_t mat, uint8_t part, uint8_t flat = 0, float bias = 0) {
@@ -321,6 +321,7 @@ static void add_wheel(float xo, float th, float cy, float cz, float R) {
 }
 
 static void build_car_model() {
+    if (!s_tri) s_tri = (Tri*)plat::allocLarge(1400 * sizeof(Tri));
     s_nt = 0;
     // ---- body: lofted octagonal sections        z     hw    ybot  ysh   ytop  tw
     float B[6][6] = { { 0.00f, 0.93f, 0.20f, 0.46f, 0.58f, 0.78f },
@@ -451,7 +452,7 @@ static void build_car_model() {
     }
     // smooth normals: average the (outward) face normals of the lofted shells at each shared vertex
     struct Acc { int x, y, z; V3 n; };
-    static Acc acc[1400 * 3];
+    Acc* acc = (Acc*)plat::allocLarge(1400 * 3 * sizeof(Acc));
     int na = 0;
     auto key = [](V3 p, int& kx, int& ky, int& kz) { kx = (int)lroundf(p.x * 500); ky = (int)lroundf(p.y * 500); kz = (int)lroundf(p.z * 500); };
     for (int pass = 0; pass < 2; ++pass)
@@ -482,6 +483,7 @@ static void build_car_model() {
                 }
             }
         }
+    plat::freeLarge(acc);
 }
 
 // rasterised result of one view
@@ -598,6 +600,7 @@ static void render_car(SpriteId id, float yaw, float el, bool straight) {
     s.hitW = 0.95f;
     s.emissive = (1 << C_TAIL) | (1 << C_TAILB);
     s.anchorX = straight ? 0 : (int16_t)lroundf(rc.x + ox);
+    plat::freeLarge(s_tri); s_tri = nullptr;
     s.lightL = straight ? 0 : (int16_t)lroundf(fminf(tl.x, tr.x) + ox);
     s.lightR = straight ? 0 : (int16_t)lroundf(fmaxf(tl.x, tr.x) + ox);
     if (!straight && yaw > -0.3f && yaw < 0.3f) { /* mild turn: same placement rules as the 3/4 views */ }
