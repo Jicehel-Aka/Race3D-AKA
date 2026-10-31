@@ -1,5 +1,6 @@
 // render.cpp - the "OutRun style" segment renderer and everything on top.
 #include "render.h"
+#include "car_art.h"
 #include "gfx.h"
 #include "platform.h"
 #include <math.h>
@@ -553,30 +554,53 @@ void draw_prop(const Race& r, const PSeg& ps, const Prop& pr) {
 
 void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int clip, int fog, bool isPlayerView) {
     const Theme& th = g_themes[r.track.theme];
-    int id = SPR_CAR;
     float sv = c.steerVis;
-    const bool art = g_sprites[SPR_ART_FIRST].px != nullptr;
-    if (art) {                                            // imported pictures: straight, mild and strong (sheared) turns
-        int b = SPR_ART_FIRST + (c.look % 8) * 5;
-        id = b;
-        if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) id = b + (r.spinDir < 0 ? 3 : 4);
-        else if (sv < -0.9f) id = b + 3;
-        else if (sv < -0.3f) id = b + 1;
-        else if (sv > 0.9f) id = b + 4;
-        else if (sv > 0.3f) id = b + 2;
-    } else {
+    int amb = th.ambient < 256 ? th.ambient + 40 : 256;
+    if (car_art_ready()) {
+        // true colour picture: straight, mild or strong lean in turns / after an impact
+        int dir = 0; float amp = 0;
+        if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) { dir = r.spinDir < 0 ? -1 : 1; amp = 11; }
+        else if (sv < -0.9f) { dir = -1; amp = 11; }
+        else if (sv < -0.3f) { dir = -1; amp = 5; }
+        else if (sv > 0.9f) { dir = 1; amp = 11; }
+        else if (sv > 0.3f) { dir = 1; amp = 5; }
+        int dhA = dw * CAR_ART_H / CAR_ART_W;
+        int ya = y + dh * 52 / 58 - dhA;                     // wheels on the ground line of the old sprites
+        // ground shadow
+        {
+            int cx = x + dw / 2, cy = y + dh * 53 / 58, rx = dw * 47 / 100, ry = dh * 4 / 58 + 1;
+            for (int j = cy - ry; j <= cy + ry; ++j) {
+                if (j < 0 || j >= clip || j >= H) continue;
+                float u = (float)(j - cy) / ry;
+                int half_ = (int)(rx * sqrtf(fmaxf(0.0f, 1.0f - u * u)));
+                int a0 = cx - half_ < 0 ? 0 : cx - half_, a1 = cx + half_ > W ? W : cx + half_;
+                for (int i = a0; i < a1; ++i) fb[j * W + i] = half(fb[j * W + i]);
+            }
+        }
+        blit_car(c.look, x, ya, dw, dhA, clip, dir, amp, amb, th.fog, fog);
+        if ((c.braking || th.ambient < 256) && dw > 8 && fog < 200) {
+            uint16_t gc = c.braking ? rgb(140, 20, 20) : rgb(70, 10, 10);
+            int ly = ya + dhA * 58 / 100;
+            if (ly < clip) {
+                int rad = (int)(dw / (isPlayerView ? 8 : 7)) + 1;
+                int shift = dir ? (int)(dir * amp * dw / 112.0f * 0.25f) : 0;
+                glowCircle(x + dw * 23 / 100 + shift, ly, rad, scale(gc, 256 - fog));
+                glowCircle(x + dw * 77 / 100 + shift, ly, rad, scale(gc, 256 - fog));
+            }
+        }
+        return;
+    }
+    int id = SPR_CAR;
     if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) id = r.spinDir < 0 ? SPR_CAR_LEFT3Q : SPR_CAR_RIGHT3Q;   // yawed by an impact
     else if (sv < -0.9f) id = SPR_CAR_LEFT3Q;
     else if (sv < -0.3f) id = SPR_CAR_LEFT;
     else if (sv > 0.9f) id = SPR_CAR_RIGHT3Q;
     else if (sv > 0.3f) id = SPR_CAR_RIGHT;
-    }
     const Sprite& sp = g_sprites[id];
     const float sc = dw / 112.0f;                         // screen pixels per sprite pixel
     if (sp.anchorX) { x += (int)((56 - sp.anchorX) * sc); dw = (int)(sp.w * sc + 0.5f); }   // wider three-quarter sprites
     uint16_t base[16];
-    if (sp.ownPal) memcpy(base, sp.pal, sizeof base); else car_palette(base, c.livery, c.braking);
-    int amb = th.ambient < 256 ? th.ambient + 40 : 256;
+    car_palette(base, c.livery, c.braking);
     const uint16_t* pal = lit_palette(base, sp.emissive, amb, th.fog, fog);
     blit(sp, pal, x, y, dw, dh, clip, false);
     if ((c.braking || th.ambient < 256) && dw > 8 && fog < 200) {

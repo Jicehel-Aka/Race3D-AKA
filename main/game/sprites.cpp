@@ -219,44 +219,7 @@ static void draw_car_base(Canvas& c) {
 static void make_car_3q(SpriteId id, int dir);
 static void render_car(SpriteId id, float yaw, float el, bool straight);
 
-// imported car pictures: straight + sheared frames for turns
-static void make_car_art() {
-    for (int d = 0; d < CAR_ART_COUNT; ++d) {
-        for (int st = 0; st < 5; ++st) {
-            Sprite& s = g_sprites[SPR_ART_FIRST + d * 5 + st];
-            Canvas c(s, CAR_ART_W, CAR_ART_H);
-            const uint8_t* src = kCarArtPx[d];
-            const int dir = (st == 1 || st == 3) ? -1 : (st == 0 ? 0 : 1);       // -1 left, +1 right
-            const float amp = st >= 3 ? 11.0f : (st >= 1 ? 5.0f : 0.0f);
-            for (int y = 0; y < CAR_ART_H; ++y) {
-                int off = (dir && y < 46) ? (int)lroundf(dir * amp * (46 - y) / 46.0f) : 0;
-                // the lower body slips the other way a little, so the car looks yawed rather than leaning
-                if (dir && y >= 46) off = (int)lroundf(-dir * amp * 0.12f);
-                for (int x = 0; x < CAR_ART_W; ++x) {
-                    int sx = x - off;
-                    if ((unsigned)sx >= (unsigned)CAR_ART_W) continue;
-                    uint8_t v = src[y * CAR_ART_W + sx];
-                    if (v) c.set(x, y, v);
-                }
-            }
-            c.ellipse(56, 54.0f, 50, 3.6f, SHADOW);
-            // the picture is drawn over the shadow
-            for (int y = 0; y < CAR_ART_H; ++y)
-                for (int x = 0; x < CAR_ART_W; ++x) {
-                    int off = (dir && y < 46) ? (int)lroundf(dir * amp * (46 - y) / 46.0f) : ((dir && y >= 46) ? (int)lroundf(-dir * amp * 0.12f) : 0);
-                    int sx = x - off;
-                    if ((unsigned)sx < (unsigned)CAR_ART_W && src[y * CAR_ART_W + sx]) c.set(x, y, src[y * CAR_ART_W + sx]);
-                }
-            s.worldW = 700.0f; s.hitW = 0.95f; s.emissive = 0;
-            s.ownPal = true;
-            for (int k = 0; k < 16; ++k) s.pal[k] = kCarArtPal[d][k];
-            s.lightL = 25; s.lightR = 87;
-        }
-    }
-}
-
 static void make_cars() {
-    make_car_art();
 #if CAR_USE_MODEL
     render_car(SPR_CAR, 0.0f, 0.02f, true);
     render_car(SPR_CAR_LEFT, 0.17f, 0.03f, false);
@@ -1304,6 +1267,7 @@ static void make_pole() {
 }
 
 void sprites_init() {
+    car_art_init();
     make_cars();
     make_palm();
     make_pine();
@@ -1477,6 +1441,90 @@ void blit(const Sprite& s, const uint16_t* pal, int x, int y, int dw, int dh, in
                 if (!v) continue;
                 *d = v == SHADOW ? gfx::half(*d) : pal[v & 15];
             }
+        }
+    }
+}
+
+
+// ------------------------------------------------------------------ true colour car pictures
+namespace {
+struct CarMip { const uint16_t* px; int w, h; };
+CarMip s_carMip[CAR_ART_COUNT][3];
+bool s_carReady = false;
+
+uint16_t* build_mip(const uint16_t* src, int sw, int sh) {
+    int w = sw / 2, h = sh / 2;
+    uint16_t* d = (uint16_t*)plat::allocLarge(w * h * sizeof(uint16_t));
+    if (!d) return nullptr;
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x) {
+            int r = 0, g = 0, b = 0, n = 0;
+            for (int k = 0; k < 4; ++k) {
+                uint16_t c = src[(2 * y + (k >> 1)) * sw + 2 * x + (k & 1)];
+                if (c == CAR_ART_KEY) continue;
+                r += c & 31; g += (c >> 5) & 63; b += c >> 11; ++n;
+            }
+            if (n < 2) { d[y * w + x] = CAR_ART_KEY; continue; }
+            uint16_t c = (uint16_t)((r / n) | ((g / n) << 5) | ((b / n) << 11));
+            d[y * w + x] = c == CAR_ART_KEY ? (uint16_t)(CAR_ART_KEY - 1) : c;
+        }
+    return d;
+}
+} // namespace
+
+void car_art_init() {
+    for (int d = 0; d < CAR_ART_COUNT; ++d) {
+        s_carMip[d][0] = { kCarArt[d], CAR_ART_W, CAR_ART_H };
+        for (int m = 1; m < 3; ++m) {
+            const CarMip& p = s_carMip[d][m - 1];
+            uint16_t* px = build_mip(p.px, p.w, p.h);
+            if (!px) { s_carReady = false; return; }
+            s_carMip[d][m] = { px, p.w / 2, p.h / 2 };
+        }
+    }
+    s_carReady = true;
+}
+bool car_art_ready() { return s_carReady; }
+
+void blit_car(int driver, int x, int y, int dw, int dh, int clipY, int dir, float amp, int ambient, uint16_t fogc, int fog) {
+    if (!s_carReady || dw <= 0 || dh <= 0) return;
+    const CarMip* mips = s_carMip[driver % CAR_ART_COUNT];
+    int m = 0;
+    while (m < 2 && mips[m + 1].w >= dw) ++m;
+    const CarMip& mp = mips[m];
+    const int ymax = clipY < gfx::H ? clipY : gfx::H;
+    int y0 = y < 0 ? 0 : y, y1 = y + dh > ymax ? ymax : y + dh;
+    if (y0 >= y1) return;
+    const int stepX = (mp.w << 16) / dw, stepY = (mp.h << 16) / dh;
+    const float shearPx = dir * amp * dw / 112.0f;
+    for (int j = y0; j < y1; ++j) {
+        float t = (float)(j - y) / dh;
+        float off = t < 0.8f ? shearPx * (0.8f - t) / 0.8f : -shearPx * 0.12f * (t - 0.8f) / 0.2f;
+        int ioff = (int)lroundf(off);
+        int xa = x + ioff, xb = x + ioff + dw;
+        int x0 = xa < 0 ? 0 : xa, x1 = xb > gfx::W ? gfx::W : xb;
+        if (x0 >= x1) continue;
+        int syf = (j - y) * stepY + (stepY >> 1) - 0x8000;
+        int ya = syf >> 16, fy = (syf >> 8) & 255;
+        int yb = ya + 1; if (ya < 0) ya = 0; if (yb < 0) yb = 0; if (ya > mp.h - 1) ya = mp.h - 1; if (yb > mp.h - 1) yb = mp.h - 1;
+        const uint16_t* ra = mp.px + ya * mp.w; const uint16_t* rb = mp.px + yb * mp.w;
+        uint16_t* d = gfx::fb + j * gfx::W + x0;
+        for (int i = x0; i < x1; ++i, ++d) {
+            int sxf = (i - xa) * stepX + (stepX >> 1) - 0x8000;
+            int xl = sxf >> 16, fx = (sxf >> 8) & 255;
+            int xr = xl + 1; if (xl < 0) xl = 0; if (xr < 0) xr = 0; if (xl > mp.w - 1) xl = mp.w - 1; if (xr > mp.w - 1) xr = mp.w - 1;
+            uint16_t c00 = ra[xl], c10 = ra[xr], c01 = rb[xl], c11 = rb[xr];
+            int w00 = (256 - fx) * (256 - fy), w10 = fx * (256 - fy), w01 = (256 - fx) * fy, w11 = fx * fy;
+            int aw = 0, r = 0, g = 0, b = 0;
+            if (c00 != CAR_ART_KEY) { aw += w00; r += w00 * (c00 & 31); g += w00 * ((c00 >> 5) & 63); b += w00 * (c00 >> 11); }
+            if (c10 != CAR_ART_KEY) { aw += w10; r += w10 * (c10 & 31); g += w10 * ((c10 >> 5) & 63); b += w10 * (c10 >> 11); }
+            if (c01 != CAR_ART_KEY) { aw += w01; r += w01 * (c01 & 31); g += w01 * ((c01 >> 5) & 63); b += w01 * (c01 >> 11); }
+            if (c11 != CAR_ART_KEY) { aw += w11; r += w11 * (c11 & 31); g += w11 * ((c11 >> 5) & 63); b += w11 * (c11 >> 11); }
+            if (aw < 32768) continue;                         // less than half covered
+            uint16_t c = (uint16_t)((r / aw) | ((g / aw) << 5) | ((b / aw) << 11));
+            if (ambient < 256) c = gfx::scale(c, ambient);
+            if (fog > 0) c = gfx::lerp(c, fogc, fog);
+            *d = c;
         }
     }
 }
