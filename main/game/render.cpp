@@ -250,50 +250,50 @@ void draw_sky(const Race& r, float time) {
     }
 }
 
-// Glacier Run backdrop: a hazy back range, then snow-capped peaks with sunlit and shaded faces,
-// bare rock with strata, blue glacier tongues with crevasses and snow couloirs.
+// Glacier Run backdrop: broad, softly lit massifs. Everything is a smooth function of the column
+// (no per-column hashes) so there are no vertical seams: light follows the wide slope, the snow line
+// wanders and fades into rock, ice blooms in soft patches, and the foot of the range melts into the haze.
 void glacier_far(const Track& tr, const Theme& th, int off, int baseY) {
     const int M = Track::BG_W - 1;
+    const uint16_t snowLit = rgb(250, 252, 255), snowSh = rgb(196, 210, 238);
+    const uint16_t rockLit = rgb(124, 130, 160), rockSh = rgb(88, 96, 136);
+    const uint16_t iceLit = rgb(176, 216, 240), iceSh = rgb(138, 176, 218);
     for (int x = 0; x < W; ++x) {
         int col = (x + off) & M;
         uint16_t* p = fb + x;
-        // far back range: slower parallax, pale and lower
-        int bcol = (((x + off / 2) * 3) + 411) & M;
-        int hb = 12 + tr.farH[bcol] * 6 / 10;
+        // pale back range, slower parallax and wider
+        int bcol = ((((x + off / 2) >> 1)) + 411) & M;
+        int hb = 14 + tr.farH[bcol] * 6 / 10;
         for (int y = baseY - hb < 0 ? 0 : baseY - hb; y < baseY && y < H; ++y) {
-            int alt = baseY - y;
-            uint16_t c = lerp(th.fog, th.farCol, 80);
-            if (alt > hb - 9) c = lerp(c, rgb(246, 250, 255), 170);
+            int alt = baseY - y, d = hb - alt;
+            uint16_t c = lerp(th.fog, rgb(214, 226, 248), 150);
+            c = lerp(c, rgb(246, 250, 255), d < 10 ? 160 - d * 10 : 60);
             p[y * W] = c;
         }
-        // main peaks
         int h = tr.farH[col];
-        uint32_t hc = hash32(col >> 2);
-        int snowLine = 32 + (int)(hash32(col) % 4) + (int)(hc % 7);
-        int slope = (int)tr.farH[(col + 3) & M] - (int)tr.farH[(col - 3) & M];
-        bool shade = slope > 0;                       // faces away from the low sun
-        bool ice = (hash32(col >> 3) % 3) == 0;      // glacier tongue
-        bool couloir = (hash32(col >> 1) % 6) == 0;  // snow gully down the rock
-        int gully = snowLine - 10 - (int)(hc % 8);
+        // light: slope averaged over a wide window, mapped smoothly to 0..255 (0 = fully shaded)
+        int sl = ((int)tr.farH[(col + 28) & M] + tr.farH[(col + 18) & M] + tr.farH[(col + 8) & M]) - ((int)tr.farH[(col - 8) & M] + tr.farH[(col - 18) & M] + tr.farH[(col - 28) & M]);
+        int lit = 150 - sl * 4;
+        lit = lit < 20 ? 20 : lit > 255 ? 255 : lit;
+        float fc = (float)col;
+        int snowLine = 30 + (int)(7.0f * sinf(fc * 0.021f) + 4.0f * sinf(fc * 0.057f + 1.3f));
+        int iceAmt = (int)(128.0f + 127.0f * sinf(fc * 0.017f + 2.0f) * sinf(fc * 0.043f)) ;   // soft patches
+        iceAmt = iceAmt < 150 ? 0 : (iceAmt - 150) * 2;
+        if (iceAmt > 190) iceAmt = 190;
         for (int y = baseY - h < 0 ? 0 : baseY - h; y < baseY && y < H; ++y) {
             int alt = baseY - y, d = h - alt;
-            uint16_t c;
-            if (alt > snowLine || (couloir && alt > gully)) {
-                int k = d * 7 > 150 ? 150 : d * 7;      // bright at the crest, bluer lower down
-                c = shade ? lerp(rgb(160, 176, 228), rgb(104, 124, 192), k) : lerp(rgb(255, 255, 255), rgb(196, 218, 246), k);
-                if (shade && (alt + col * 2) % 9 == 0) c = lerp(c, rgb(84, 104, 176), 70);   // faint gullies
-            } else {
-                int haze = alt < 14 ? 120 - alt * 6 : 36;
-                if (ice) {
-                    c = shade ? rgb(86, 130, 196) : rgb(150, 204, 238);
-                    if ((col * 2 + alt * 3) % 11 == 0) c = scale(c, 200);
-                } else {
-                    c = shade ? rgb(52, 60, 100) : rgb(104, 110, 140);
-                    if (alt % 6 == 0) c = scale(c, 215);
-                }
-                c = lerp(c, th.fog, haze);
-            }
-            p[y * W] = c;
+            int sm = (alt - snowLine) * 22 + 128;          // soft snow/rock transition
+            sm = sm < 0 ? 0 : sm > 255 ? 255 : sm;
+            uint16_t snow = lerp(snowSh, snowLit, lit);
+            snow = lerp(snow, rgb(176, 198, 236), d > 24 ? 70 : d * 3);              // bluer lower down
+            uint16_t rock = lerp(rockSh, rockLit, lit);
+            uint16_t ic = lerp(iceSh, iceLit, lit);
+            rock = lerp(rock, ic, iceAmt);
+            uint16_t c = lerp(rock, snow, sm);
+            // aerial haze towards the foot of the range
+            int haze = alt < 16 ? 150 - alt * 8 : 22;
+            if (d < 2) c = lerp(c, snowLit, 90);           // thin bright rim on the crest
+            p[y * W] = lerp(c, th.fog, haze);
         }
     }
 }

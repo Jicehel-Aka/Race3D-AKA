@@ -530,9 +530,9 @@ function buildBackdrop(theme, bgSeed) {
       }
       fh += noise1(u * 2.0 + 7) * 3;
     } else if (theme === 4) {
-      const n0 = noise1(u * 0.25) * 0.55 + noise1(u * 0.6 + 13) * 0.3 + noise1(u * 2.0 + 7) * 0.15;
+      const n0 = noise1(u * 0.14) * 0.6 + noise1(u * 0.33 + 13) * 0.3 + noise1(u * 1.1 + 7) * 0.1;
       const ridge = 1 - Math.abs(2 * n0 - 1);
-      fh = 12 + ridge * ridge * 62 + noise1(u * 8.0 + 19) * 6;
+      fh = 14 + ridge * ridge * 54 + noise1(u * 3.0 + 19) * 3;
     } else if (theme === 5) {
       const br = Rng(Math.floor(x / 22) * 6361 + 17);
       fh = 10 + br.f() * 30; if (br.f() < 0.15) fh += 28;
