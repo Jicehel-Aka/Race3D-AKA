@@ -136,37 +136,39 @@ static void paint(Canvas& c, int y0, int y1) {      // turn the flat C_BM fill i
 
 static void draw_car_base(Canvas& c) {
     c.ellipse(56, 54, 56, 4.5f, SHADOW);
-    // rear tyres: wide, rounded, with tread rings and a bright shoulder
+    // rear tyres: rounded, with tread rings and a bright shoulder
     for (int side = 0; side < 2; ++side) {
         int x0 = side ? 87 : 1;
-        c.rect(x0, 32, 24, 22, C_TY);
-        c.rect(x0 + 1, 54, 22, 1, C_TY);
-        for (int y = 36; y < 54; y += 4) c.rect(x0 + 3, y, 18, 1, C_TYL);
-        c.rect(x0, 33, 2, 20, C_OUT);  c.rect(x0 + 22, 33, 2, 20, C_OUT);
-        c.rect(x0 + 3, 36, 2, 16, C_TYL);                       // lit shoulder
-        c.set(x0, 54, 0); c.set(x0 + 23, 54, 0);
+        float ty[] = { (float)x0 + 3, 31, (float)x0 + 21, 31, (float)x0 + 24, 36, (float)x0 + 24, 50, (float)x0 + 20, 55,
+                       (float)x0 + 4, 55, (float)x0, 50, (float)x0, 36 };
+        c.poly(ty, 8, C_TY);
+        for (int y = 36; y < 54; y += 4) for (int x = x0 + 2; x < x0 + 22; ++x) if (c.get(x, y) == C_TY) c.set(x, y, C_TYL);
+        c.rect(x0 + 3, 37, 2, 14, C_TYL);                       // lit shoulder
     }
-    // body: wide fender flares over the tyres, narrower rear panel between them
-    float body[] = { 7, 25, 105, 25, 111, 30, 111, 39, 103, 40, 88, 41, 88, 49, 24, 49, 24, 41, 9, 40, 1, 39, 1, 30 };
-    c.poly(body, 12, C_BM);
-    paint(c, 25, 49);
-    // cabin
-    float cab[] = { 31, 5, 35, 2, 77, 2, 81, 5, 95, 25, 17, 25 };
-    c.poly(cab, 6, C_BM);
-    paint(c, 2, 25);
+    // body: sloping shoulders, rounded flares with wheel arches, narrower rear panel between the tyres
+    float body[] = { 20, 24, 12, 25, 6, 27.5f, 2.5f, 31, 0.5f, 36, 1, 41,
+                     5, 39.5f, 9, 38, 13, 37.5f, 17, 38, 21, 39.5f, 24, 42, 24, 48, 27, 50, 85, 50, 88, 48, 88, 42,
+                     91, 39.5f, 95, 38, 99, 37.5f, 103, 38, 107, 39.5f, 111, 41, 111.5f, 36, 109.5f, 31, 106, 27.5f, 100, 25, 92, 24 };
+    c.poly(body, 28, C_BM);
+    paint(c, 24, 50);
+    // cabin: rounded roof, flowing C-pillars
+    float cab[] = { 36, 2, 76, 2, 80, 4, 83, 9, 88, 16, 93, 23, 94, 26, 18, 26, 19, 23, 24, 16, 29, 9, 32, 4 };
+    c.poly(cab, 12, C_BM);
+    paint(c, 2, 26);
     // rear window: sky reflection on top, soft streaks
-    float win[] = { 37, 6, 75, 6, 85, 22, 27, 22 };
-    c.poly(win, 4, C_GD);
-    for (int y = 6; y < 22; ++y)
+    float win[] = { 38, 5.5f, 74, 5.5f, 78, 8, 81, 13, 85, 20, 27, 20, 31, 13, 34, 8 };
+    c.poly(win, 8, C_GD);
+    for (int y = 5; y < 21; ++y)
         for (int x = 24; x < 90; ++x) {
             if (c.get(x, y) != C_GD) continue;
-            float t = (y - 6) / 16.0f;
+            float t = (y - 5) / 15.0f;
             bool hi = t < 0.30f && ((x + y) & 1) == 0;
             if (hi || (t < 0.14f)) c.set(x, y, C_GL);
         }
     c.quad(42, 22, 53, 6, 58, 6, 47, 22, C_GL);
     c.quad(53, 22, 61, 6, 63, 6, 55, 22, C_GL);
-    c.rect(30, 20, 52, 1, C_OUT);                               // lower window seal
+    c.rect(28, 20, 56, 1, C_OUT);                               // lower window seal
+    for (int x = 12; x < 100; ++x) if (((x >> 1) & 1) == 0 && c.get(x, 27) != 0) { uint8_t v = c.get(x, 27); if (v == C_BM || v == C_BL || v == C_BD) c.set(x, 27, C_BL); }
     // racing stripes along roof, deck and tail
     for (int y = 2; y < 49; ++y)
         for (int x = 0; x < CAR_W; ++x) {
@@ -175,12 +177,12 @@ static void draw_car_base(Canvas& c) {
             if (st && (v == C_BM || v == C_BL || v == C_BD || v == C_SPEC)) c.set(x, y, C_STRIPE);
         }
     // spoiler: end plates, pylons, thick blade with a lit top edge
-    c.rect(30, 22, 4, 5, C_TRIM); c.rect(78, 22, 4, 5, C_TRIM);
-    c.quad(2, 15, 110, 15, 109, 21, 3, 21, C_BD);
-    c.rect(2, 15, 108, 1, C_SPEC); c.rect(3, 16, 106, 1, C_BL);
-    c.rect(3, 20, 106, 1, C_OUT);
-    c.rect(0, 10, 4, 14, C_BM); c.rect(0, 10, 1, 14, C_BL); c.rect(3, 10, 1, 14, C_BD);
-    c.rect(108, 10, 4, 14, C_BM); c.rect(108, 10, 1, 14, C_BL); c.rect(111, 10, 1, 14, C_BD);
+    c.rect(30, 19, 4, 8, C_TRIM); c.rect(78, 19, 4, 8, C_TRIM);
+    c.quad(4, 14, 108, 14, 107, 19, 5, 19, C_BD);
+    c.rect(4, 14, 104, 1, C_SPEC); c.rect(5, 15, 102, 1, C_BL);
+    c.rect(5, 18, 102, 1, C_OUT);
+    c.rect(2, 9, 4, 13, C_BM); c.rect(2, 9, 1, 13, C_BL); c.rect(5, 9, 1, 13, C_BD);
+    c.rect(106, 9, 4, 13, C_BM); c.rect(106, 9, 1, 13, C_BL); c.rect(109, 9, 1, 13, C_BD);
     // tail lights: lens housings with segments, a slatted centre panel
     for (int x0 : { 8, 78 }) {
         c.rect(x0, 28, 27, 11, C_TRIM);
