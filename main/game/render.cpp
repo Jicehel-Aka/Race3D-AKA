@@ -558,17 +558,26 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
     int amb = th.ambient < 256 ? th.ambient + 40 : 256;
     if (car_art_ready()) {
         // true colour pictures: rear view, or the three-quarter rear view in hard turns / after an impact (never deformed)
-        bool tq = false, flip = false;
-        if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) { tq = true; flip = r.spinDir > 0; }
-        else if (sv < -0.9f) tq = true;
-        else if (sv > 0.9f) { tq = true; flip = true; }
+        // stage: 0 rear view, 1..CAR_ART_MID intermediate pictures, CAR_ART_MID+1 three-quarter view
+        int stage = 0; bool flip = false;
+        if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) { stage = CAR_ART_MID + 1; flip = r.spinDir > 0; }
+        else {
+            // thresholds are tighter where the picture changes most (stages 2-4: the flank appears)
+            static const float kStep[CAR_ART_MID + 1] = { 0.18f, 0.30f, 0.42f, 0.55f, 0.70f, 0.88f };
+            float a = fabsf(sv);
+            stage = 0;
+            while (stage <= CAR_ART_MID && a >= kStep[stage]) ++stage;
+            flip = sv > 0;
+        }
+        const bool tq = stage > 0;                          // wide pictures
+        const float u = (float)stage / (CAR_ART_MID + 1);   // 0 rear .. 1 three-quarter
         int dhA = dw * CAR_ART_H / CAR_ART_W;
         // the tyres touch the ground line of the old sprites (the picture has a diffuser below the tyres)
-        int ya = y + dh * 52 / 58 - dhA * (tq ? 97 : 93) / 100;
+        int ya = y + dh * 52 / 58 - dhA * (93 + (int)(4 * u + 0.5f)) / 100;
         int pw = tq ? dw * CAR_ART3Q_W / CAR_ART_W : dw, px0 = tq ? x - (pw - dw) / 2 : x;
         // ground shadow: darkest right under the tyres
         {
-            int gy = ya + dhA * (tq ? 97 : 93) / 100;
+            int gy = ya + dhA * (93 + (int)(4 * u + 0.5f)) / 100;
             int cx = px0 + pw / 2, ry = dhA * 9 / 100 + 1, rx = pw * 46 / 100, cy = gy - ry / 2;
             for (int j = cy - ry; j <= cy + ry; ++j) {
                 if (j < 0 || j >= clip || j >= H) continue;
@@ -578,11 +587,16 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
                 for (int i = a0; i < a1; ++i) fb[j * W + i] = scale(fb[j * W + i], 110);
             }
         }
-        blit_car(c.look, tq, flip, x, ya, dw, dhA, clip, amb, th.fog, fog);
+        blit_car(c.look, stage, flip, x, ya, dw, dhA, clip, amb, th.fog, fog);
         // lamps: lit when braking (strong) or at night (dim), on the lamp boxes of the picture
         if ((c.braking || th.ambient < 256) && dw > 8 && fog < 200) {
             const int picW = tq ? CAR_ART3Q_W : CAR_ART_W;
-            const uint8_t* lb = tq ? kLamp3q[c.look % CAR_ART_COUNT] : kLampRear;
+            int lb[8];                                       // lamp boxes slide from the rear picture (centred in the wide frame) to the 3/4 ones
+            for (int q = 0; q < 8; ++q) {
+                if (!tq) { lb[q] = kLampRear[q]; continue; }
+                const int a0 = kLampRear[q] + ((q & 1) ? 0 : (CAR_ART3Q_W - CAR_ART_W) / 2), a1 = kLamp3q[c.look % CAR_ART_COUNT][q];
+                lb[q] = a0 + (int)((a1 - a0) * u + (a1 >= a0 ? 0.5f : -0.5f));
+            }
             uint16_t col = c.braking ? rgb(255, 36, 24) : rgb(150, 14, 14);
             int alpha = c.braking ? 190 : 110;
             for (int k = 0; k < 2; ++k) {

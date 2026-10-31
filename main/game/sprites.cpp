@@ -1454,6 +1454,7 @@ namespace {
 struct CarMip { const uint16_t* px; int w, h; };
 CarMip s_carMip[CAR_ART_COUNT][3];
 CarMip s_carMip3[CAR_ART_COUNT][3];
+CarMip s_carMipMid[CAR_ART_COUNT][CAR_ART_MID][3];
 bool s_carReady = false;
 
 uint16_t* build_mip(const uint16_t* src, int sw, int sh) {
@@ -1492,15 +1493,26 @@ void car_art_init() {
             if (!px) { s_carReady = false; return; }
             s_carMip3[d][m] = { px, p.w / 2, p.h / 2 };
         }
+        for (int k = 0; k < CAR_ART_MID; ++k) {
+            s_carMipMid[d][k][0] = { kCarArtMid[d][k], CAR_ART3Q_W, CAR_ART_H };
+            for (int m = 1; m < 3; ++m) {
+                const CarMip& p = s_carMipMid[d][k][m - 1];
+                uint16_t* px = build_mip(p.px, p.w, p.h);
+                if (!px) { s_carReady = false; return; }
+                s_carMipMid[d][k][m] = { px, p.w / 2, p.h / 2 };
+            }
+        }
     }
     s_carReady = true;
 }
 bool car_art_ready() { return s_carReady; }
 
-void blit_car(int driver, bool tq, bool flip, int x, int y, int dw, int dh, int clipY, int ambient, uint16_t fogc, int fog) {
+void blit_car(int driver, int stage, bool flip, int x, int y, int dw, int dh, int clipY, int ambient, uint16_t fogc, int fog) {
     if (!s_carReady || dw <= 0 || dh <= 0) return;
-    const CarMip* mips = (tq ? s_carMip3 : s_carMip)[driver % CAR_ART_COUNT];
-    if (tq) { int w3 = dw * CAR_ART3Q_W / CAR_ART_W; x -= (w3 - dw) / 2; dw = w3; }      // same pixel scale as the rear view, centred
+    // stage 0 = rear view, 1..CAR_ART_MID = intermediate pictures, CAR_ART_MID+1 = three-quarter view
+    const int d = driver % CAR_ART_COUNT;
+    const CarMip* mips = stage <= 0 ? s_carMip[d] : stage > CAR_ART_MID ? s_carMip3[d] : s_carMipMid[d][stage - 1];
+    if (stage > 0) { int w3 = dw * CAR_ART3Q_W / CAR_ART_W; x -= (w3 - dw) / 2; dw = w3; }      // same pixel scale as the rear view, centred
     int m = 0;
     while (m < 2 && mips[m + 1].w >= dw) ++m;
     const CarMip& mp = mips[m];
