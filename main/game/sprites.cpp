@@ -115,59 +115,101 @@ struct Canvas {
 
 // ------------------------------------------------------------------ cars
 // palette: 1 outline 2 body dark 3 body 4 body light 5 glass dark 6 glass light
-// 7 tyre 8 tyre light 9 tail 10 tail bright 11 trim 12 plate 13 exhaust 14 stripe
-enum { C_OUT = 1, C_BD, C_BM, C_BL, C_GD, C_GL, C_TY, C_TYL, C_TAIL, C_TAILB, C_TRIM, C_PLATE, C_EXH, C_STRIPE };
+// 7 tyre 8 tyre light 9 tail 10 tail bright 11 trim 12 plate 13 exhaust 14 stripe 15 specular
+enum { C_OUT = 1, C_BD, C_BM, C_BL, C_GD, C_GL, C_TY, C_TYL, C_TAIL, C_TAILB, C_TRIM, C_PLATE, C_EXH, C_STRIPE, C_SPEC };
 static const int CAR_W = 112, CAR_H = 58;
 
+// body paint with a soft gradient: lit from the upper left, darker towards the ground and the right flank
+static uint8_t body_shade(int x, int y, int y0, int y1) {
+    float t = (float)(y - y0) / (float)(y1 - y0);
+    float u = (x - 56) / 56.0f;
+    float sh = 0.74f - t * 0.72f - u * 0.30f;
+    static const float bay[4] = { 0.0f, 0.5f, 0.75f, 0.25f };
+    sh += (bay[(x & 1) + 2 * (y & 1)] - 0.375f) * 0.12f;
+    return sh > 0.74f ? C_SPEC : sh > 0.46f ? C_BL : sh > 0.10f ? C_BM : C_BD;
+}
+static void paint(Canvas& c, int y0, int y1) {      // turn the flat C_BM fill into shaded paint
+    for (int y = y0; y < y1; ++y)
+        for (int x = 0; x < CAR_W; ++x)
+            if (c.get(x, y) == C_BM) c.set(x, y, body_shade(x, y, y0, y1));
+}
+
 static void draw_car_base(Canvas& c) {
-    // soft shadow
-    c.ellipse(56, 53, 56, 5.5f, SHADOW);
-    // tyres
-    c.rect(8, 32, 20, 23, C_TY);
-    c.rect(84, 32, 20, 23, C_TY);
-    for (int y = 34; y < 55; y += 3) { c.rect(9, y, 18, 1, C_TYL); c.rect(85, y, 18, 1, C_TYL); }
-    // lower body
-    float body[] = { 7, 23, 105, 23, 110, 29, 111, 42, 105, 48, 7, 48, 1, 42, 2, 29 };
-    c.poly(body, 8, C_BM);
-    c.recolor(0, 23, CAR_W, 25, C_BM, C_BL);
-    c.recolor(0, 43, CAR_W, 49, C_BM, C_BD);
-    c.recolor(0, 25, 8, 43, C_BM, C_BL);        // lit left flank
-    c.recolor(104, 25, CAR_W, 43, C_BM, C_BD);  // shaded right flank
+    c.ellipse(56, 54, 56, 4.5f, SHADOW);
+    // rear tyres: wide, rounded, with tread rings and a bright shoulder
+    for (int side = 0; side < 2; ++side) {
+        int x0 = side ? 87 : 1;
+        c.rect(x0, 32, 24, 22, C_TY);
+        c.rect(x0 + 1, 54, 22, 1, C_TY);
+        for (int y = 36; y < 54; y += 4) c.rect(x0 + 3, y, 18, 1, C_TYL);
+        c.rect(x0, 33, 2, 20, C_OUT);  c.rect(x0 + 22, 33, 2, 20, C_OUT);
+        c.rect(x0 + 3, 36, 2, 16, C_TYL);                       // lit shoulder
+        c.set(x0, 54, 0); c.set(x0 + 23, 54, 0);
+    }
+    // body: wide fender flares over the tyres, narrower rear panel between them
+    float body[] = { 7, 25, 105, 25, 111, 30, 111, 39, 103, 40, 88, 41, 88, 49, 24, 49, 24, 41, 9, 40, 1, 39, 1, 30 };
+    c.poly(body, 12, C_BM);
+    paint(c, 25, 49);
     // cabin
-    c.quad(31, 3, 81, 3, 95, 24, 17, 24, C_BM);
-    c.recolor(0, 3, CAR_W, 5, C_BM, C_BL);
-    c.quad(17, 24, 31, 3, 35, 3, 24, 24, C_BL);     // left pillar (lit)
-    c.quad(88, 24, 77, 3, 81, 3, 95, 24, C_BD);     // right pillar (shade)
-    // rear window + reflections
-    c.quad(36, 6, 76, 6, 86, 21, 26, 21, C_GD);
-    c.quad(42, 21, 54, 6, 60, 6, 48, 21, C_GL);
-    c.quad(52, 21, 64, 6, 66, 6, 54, 21, C_GL);
-    // racing stripes over the body
-    for (int y = 3; y < 48; ++y)
-        for (int x = 0; x < CAR_W; ++x) {
-            bool s = (x >= 49 && x < 54) || (x >= 58 && x < 63);
-            uint8_t v = c.get(x, y);
-            if (s && (v == C_BM || v == C_BL || v == C_BD)) c.set(x, y, C_STRIPE);
+    float cab[] = { 31, 5, 35, 2, 77, 2, 81, 5, 95, 25, 17, 25 };
+    c.poly(cab, 6, C_BM);
+    paint(c, 2, 25);
+    // rear window: sky reflection on top, soft streaks
+    float win[] = { 37, 6, 75, 6, 85, 22, 27, 22 };
+    c.poly(win, 4, C_GD);
+    for (int y = 6; y < 22; ++y)
+        for (int x = 24; x < 90; ++x) {
+            if (c.get(x, y) != C_GD) continue;
+            float t = (y - 6) / 16.0f;
+            bool hi = t < 0.30f && ((x + y) & 1) == 0;
+            if (hi || (t < 0.14f)) c.set(x, y, C_GL);
         }
-    // rear wing
-    c.quad(0, 17, 112, 17, 110, 22, 2, 22, C_BD);
-    c.rect(2, 17, 108, 1, C_BL);
-    c.rect(28, 22, 5, 5, C_TRIM);
-    c.rect(79, 22, 5, 5, C_TRIM);
-    // tail lights + centre panel
-    c.rect(7, 28, 27, 7, C_TAIL);
-    c.rect(78, 28, 27, 7, C_TAIL);
-    c.rect(9, 29, 10, 4, C_TAILB);
-    c.rect(93, 29, 10, 4, C_TAILB);
-    c.rect(36, 28, 40, 7, C_TRIM);
-    c.rect(52, 30, 8, 3, C_STRIPE);
-    // bumper, plate, diffuser, exhausts
-    c.rect(9, 39, 94, 5, C_TRIM);
-    c.rect(45, 37, 22, 7, C_PLATE);
-    c.rect(48, 39, 4, 3, C_OUT); c.rect(54, 39, 4, 3, C_OUT); c.rect(60, 39, 4, 3, C_OUT);
-    for (int x = 42; x < 72; x += 5) c.rect(x, 44, 2, 4, C_TRIM);
-    c.ellipse(36, 46, 4.5f, 2.6f, C_EXH); c.ellipse(36, 46, 2.2f, 1.3f, C_OUT);
-    c.ellipse(76, 46, 4.5f, 2.6f, C_EXH); c.ellipse(76, 46, 2.2f, 1.3f, C_OUT);
+    c.quad(42, 22, 53, 6, 58, 6, 47, 22, C_GL);
+    c.quad(53, 22, 61, 6, 63, 6, 55, 22, C_GL);
+    c.rect(30, 20, 52, 1, C_OUT);                               // lower window seal
+    // racing stripes along roof, deck and tail
+    for (int y = 2; y < 49; ++y)
+        for (int x = 0; x < CAR_W; ++x) {
+            bool st = (x >= 49 && x < 54) || (x >= 58 && x < 63);
+            uint8_t v = c.get(x, y);
+            if (st && (v == C_BM || v == C_BL || v == C_BD || v == C_SPEC)) c.set(x, y, C_STRIPE);
+        }
+    // spoiler: end plates, pylons, thick blade with a lit top edge
+    c.rect(30, 22, 4, 5, C_TRIM); c.rect(78, 22, 4, 5, C_TRIM);
+    c.quad(2, 15, 110, 15, 109, 21, 3, 21, C_BD);
+    c.rect(2, 15, 108, 1, C_SPEC); c.rect(3, 16, 106, 1, C_BL);
+    c.rect(3, 20, 106, 1, C_OUT);
+    c.rect(0, 10, 4, 14, C_BM); c.rect(0, 10, 1, 14, C_BL); c.rect(3, 10, 1, 14, C_BD);
+    c.rect(108, 10, 4, 14, C_BM); c.rect(108, 10, 1, 14, C_BL); c.rect(111, 10, 1, 14, C_BD);
+    // tail lights: lens housings with segments, a slatted centre panel
+    for (int x0 : { 8, 78 }) {
+        c.rect(x0, 28, 27, 11, C_TRIM);
+        c.rect(x0 + 1, 29, 25, 9, C_TAIL);
+        c.rect(x0 + 1, 29, 25, 1, C_TAILB);
+        c.rect(x0 + 3, 32, 11, 3, C_TAILB);
+        for (int k : { 8, 16, 22 }) c.rect(x0 + k, 29, 1, 9, C_OUT);
+    }
+    c.rect(36, 28, 40, 11, C_TRIM);
+    for (int y = 29; y < 38; y += 2) c.rect(37, y, 38, 1, C_OUT);
+    c.rect(51, 31, 10, 5, C_STRIPE); c.rect(52, 32, 8, 1, C_SPEC); c.rect(51, 35, 10, 1, C_OUT);
+    // number plate with tiny characters
+    c.rect(44, 41, 24, 8, C_PLATE);
+    c.rect(44, 41, 24, 1, C_OUT); c.rect(44, 48, 24, 1, C_OUT); c.rect(44, 41, 1, 8, C_OUT); c.rect(67, 41, 1, 8, C_OUT);
+    for (int k = 0; k < 5; ++k) { c.rect(47 + k * 4, 43, 2, 4, C_OUT); if (k & 1) c.set(48 + k * 4, 45, C_PLATE); }
+    // bumper bar, diffuser fins, chrome exhausts
+    c.rect(24, 40, 20, 3, C_TRIM); c.rect(68, 40, 20, 3, C_TRIM);
+    c.rect(26, 49, 60, 4, C_TRIM);
+    for (int x = 28; x < 84; x += 4) c.rect(x, 49, 1, 4, C_OUT);
+    for (int ex : { 34, 78 }) {
+        c.ellipse(ex, 48.5f, 5.0f, 3.0f, C_EXH);
+        c.ellipse(ex, 48.8f, 2.6f, 1.6f, C_OUT);
+        c.set(ex - 3, 47, C_PLATE); c.set(ex - 2, 46, C_PLATE);
+    }
+    // shade under the flares, over the tyres
+    for (int side = 0; side < 2; ++side) {
+        int x0 = side ? 87 : 1;
+        for (int y = 40; y < 43; ++y) for (int x = x0; x < x0 + 24; ++x) { uint8_t v = c.get(x, y); if (v == C_TY || v == C_TYL) c.set(x, y, C_OUT); }
+    }
 }
 
 static void make_cars() {
@@ -192,7 +234,7 @@ static void make_cars() {
             }
         }
         // the side of the car becomes visible on the outer side
-        for (int y = 23; y < 46; ++y) {
+        for (int y = 26; y < 39; ++y) {
             if (dir < 0) { for (int k = 104; k < 111; ++k) if (c.get(k, y) && c.get(k, y) != SHADOW) c.set(k, y, C_BD); }
             else         { for (int k = 1;   k < 8;   ++k) if (c.get(k, y) && c.get(k, y) != SHADOW) c.set(k, y, C_BL); }
         }
@@ -211,9 +253,10 @@ void car_palette(uint16_t out[16], const Livery& l, bool braking) {
     out[C_OUT] = rgb(16, 12, 20);
     out[C_BD] = gfx::scale(l.body, 150);
     out[C_BM] = l.body;
-    out[C_BL] = gfx::lerp(l.body, 0xFFFF, 100);
-    out[C_GD] = rgb(30, 40, 62);
-    out[C_GL] = rgb(110, 140, 170);
+    out[C_BL] = gfx::lerp(l.body, 0xFFFF, 90);
+    out[C_SPEC] = gfx::lerp(l.body, 0xFFFF, 200);
+    out[C_GD] = rgb(22, 30, 52);
+    out[C_GL] = rgb(118, 150, 186);
     out[C_TY] = rgb(26, 24, 28);
     out[C_TYL] = rgb(58, 56, 62);
     out[C_TAIL] = braking ? rgb(255, 40, 40) : rgb(150, 18, 26);
@@ -222,7 +265,6 @@ void car_palette(uint16_t out[16], const Livery& l, bool braking) {
     out[C_PLATE] = rgb(236, 232, 210);
     out[C_EXH] = rgb(150, 150, 160);
     out[C_STRIPE] = l.stripe;
-    out[15] = 0;
 }
 
 // ------------------------------------------------------------------ scenery

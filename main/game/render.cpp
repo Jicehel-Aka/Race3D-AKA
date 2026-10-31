@@ -291,7 +291,7 @@ void glacier_far(const Track& tr, const Theme& th, int off, int baseY) {
             rock = lerp(rock, ic, iceAmt);
             uint16_t c = lerp(rock, snow, sm);
             // aerial haze towards the foot of the range
-            int haze = alt < 16 ? 150 - alt * 8 : 22;
+            int haze = alt < 24 ? 205 - alt * 7 : 37;
             if (d < 2) c = lerp(c, snowLit, 90);           // thin bright rim on the crest
             p[y * W] = lerp(c, th.fog, haze);
         }
@@ -402,6 +402,12 @@ void draw_layers(const Race& r, int baseY) {
             if (tr.theme == THEME_CITY) {
                 if (alt >= h - 1) c = th.nearHi;
                 else if ((col % 5) == 1 && (y % 5) == 1 && (hash32(col * 7 + y) & 3) == 0) c = rgb(255, 200, 120);
+            } else if (tr.theme == THEME_GLACIER) {
+                // conifer belt melting into the mountain haze: no hard dark edge
+                int dd = h - alt;                                   // 0 at the treeline
+                int hz = 70;
+                if (dd < 7) hz = 70 + (7 - dd) * 18 + ((((x + y) & 1) ? 10 : -10));
+                c = lerp(c, th.fog, hz > 230 ? 230 : hz < 0 ? 0 : hz);
             } else if (alt >= h - 1) c = th.nearHi;
             p[y * W] = c;
         }
