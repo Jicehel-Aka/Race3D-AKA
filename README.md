@@ -33,6 +33,18 @@ custom bootloader): the bootloader only starts the launcher after a power-on, so
 the game powers the console off; switch it back on to get the launcher. With the
 older launcher layout (`ota_1`) it jumps there directly.
 
+## Online races (Wi-Fi)
+
+Up to 8 cars per room, shared with friends: the title menu has **ONLINE RACE (WI-FI)**. The public race server
+(`aka-turbo-race-server.onrender.com`) is built in; you only need to tell the console your Wi-Fi.
+
+1. Copy `race3d/online.example.txt` to `race3d/online.txt` on the SD card and fill in `ssid=`, `pass=`, `room=` (any name, 10 letters/digits max) and `name=`.
+2. Choose ONLINE RACE. The first player in a room is the host: LEFT/RIGHT picks the track, UP/DOWN the number of laps, A starts the race for everybody (empty slots are filled by server-driven computer cars).
+3. Friends type the same `room=` on their console, or join from the browser control page (https://jicehel-aka.github.io/Race3D-AKA/).
+
+The free server sleeps when nobody plays, so the first connection can take about a minute. Only the Wi-Fi password is kept on the SD card; it is never sent to the server.
+Own server: see `server/README.md`, then add `host=your-server.example.com` to `online.txt`.
+
 ## Adding a circuit
 
 1. Draw it in `tools/track_editor.html`, download the `.trk` and put it in `tracks/` (`06_my_track.trk`).

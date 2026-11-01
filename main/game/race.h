@@ -42,6 +42,9 @@ struct Car {
     int place = 0;
     int look = 0;          // which imported car picture this driver uses
     bool retired = false;  // engine dead: the car coasts to a stop and is out of the race
+    // online races: this car is driven by another player / the server, we only follow its last known state
+    bool remote = false;
+    float netDist = 0, netX = 0, netSpeed = 0, netSteer = 0, netAge = 0;
 };
 
 // what the player hit: drives the particles, the sound and the physics of the impact
@@ -121,6 +124,7 @@ public:
 private:
     void updatePlayer(float dt, const plat::Input& in);
     void updateAI(Car& c, float dt);
+    void updateRemote(Car& c, float dt);
     void driveAI(Car& c, float dt, float& targetSpeed);
     void collisions(float dt);
     void laps_(Car& c);

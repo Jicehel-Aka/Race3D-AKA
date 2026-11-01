@@ -311,7 +311,8 @@ function buildBinarySnapshot(room: RaceRoom): Buffer {
   const buf = Buffer.alloc(4 + CAR_COUNT * AKA_BIN_PACKET_SIZE);
   const phaseMap: Record<RoomPhase, number> = { LOBBY: 0, COUNTDOWN: 1, RACING: 2, RESULTS: 3 };
   buf[0] = 0xa5;
-  buf[1] = (phaseMap[room.phase] & 0x03) | ((room.trackId & 0x0f) << 2);
+  const lapsIdx = Math.max(0, [1, 2, 3, 5].indexOf(room.laps));
+  buf[1] = (phaseMap[room.phase] & 0x03) | ((room.trackId & 0x0f) << 2) | ((lapsIdx & 0x03) << 6);   // bits 6-7: lap count index
   buf.writeUInt16LE(Math.min(65535, Math.round(room.raceTime * 100)), 2);
 
   for (let i = 0; i < CAR_COUNT; i++) {

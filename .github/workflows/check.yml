@@ -35,6 +35,11 @@ jobs:
         run: |
           . $IDF_PATH/export.sh
           idf.py build
+      - name: Mémoire (Wi-Fi + TLS)
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py size | tail -25
 
   race-server:
     runs-on: ubuntu-latest

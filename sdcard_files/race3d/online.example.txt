@@ -1,0 +1,15 @@
+# AKA Turbo 3D Grand Prix - courses en ligne / online races
+# Copy this file to  online.txt  (same folder, on the SD card) and edit it.
+# Copiez ce fichier en  online.txt  (meme dossier, sur la carte SD) puis modifiez-le.
+
+ssid=NomDeMonWifi
+pass=MotDePasseWifi
+
+# Friends who type the same room name race together (letters / digits, 10 max).
+# Les amis qui ecrivent le meme nom de salle courent ensemble.
+room=AKA1
+name=PILOTE
+
+# The public race server is already built in. Only change this if you host your own:
+# Le serveur public est deja integre. A changer seulement si vous hebergez le votre :
+# host=aka-turbo-race-server.onrender.com

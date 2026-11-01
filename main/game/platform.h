@@ -37,6 +37,25 @@ void playSfx(int id);
 void playMusic(int song, bool restart = false);   // song index (music.h), -1 = stop
 void setMusicVolume(float v);                     // 0..1
 
+// Network (online races). Implemented by the platform in a background task: Wi-Fi, TCP/TLS and the WebSocket
+// connection. Everything here is non blocking for the game thread.
+enum NetStatus : int { NET_OFF = 0, NET_WIFI, NET_CONNECTING, NET_ONLINE, NET_FAILED };
+struct NetConfig {
+    char ssid[33] = "";
+    char pass[65] = "";
+    char host[96] = "";
+    char path[160] = "/ws/race";
+    uint16_t port = 443;
+    bool tls = true;
+};
+void        netStart(const NetConfig& cfg);                      // connect Wi-Fi + WebSocket in the background
+void        netStop();                                           // close everything and free the memory
+int         netStatus();                                         // NetStatus
+const char* netError();                                          // short reason when NET_FAILED
+bool        netSend(bool binary, const void* data, size_t len);  // queued; false when the queue is full
+int         netRecv(void* buf, size_t cap, bool* binary);        // next received message, 0 when none
+bool        readTextFile(const char* path, char* buf, size_t cap);   // whole file as a string (SD card)
+
 // Tiny persistent store (records).
 bool saveBlob(const void* data, size_t size);
 bool loadBlob(void* data, size_t size);

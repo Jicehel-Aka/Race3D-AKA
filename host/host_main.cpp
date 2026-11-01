@@ -36,6 +36,18 @@ bool loadBlob(void* d, size_t n) {
     FILE* f = fopen("race3d_records.bin", "rb"); if (!f) return false;
     size_t r = fread(d, 1, n, f); fclose(f); return r == n;
 }
+// online races are only available on the console (Wi-Fi); the PC build has no network backend
+void netStart(const NetConfig&) {}
+void netStop() {}
+int netStatus() { return NET_FAILED; }
+const char* netError() { return "PC: NOT AVAILABLE"; }
+bool netSend(bool, const void*, size_t) { return false; }
+int netRecv(void*, size_t, bool*) { return 0; }
+bool readTextFile(const char* path, char* buf, size_t cap) {
+    const char* base = strrchr(path, '/'); base = base ? base + 1 : path;      // PC: online.txt next to the exe
+    FILE* f = fopen(base, "rb"); if (!f) return false;
+    size_t n = fread(buf, 1, cap - 1, f); fclose(f); buf[n] = 0; return true;
+}
 } // namespace plat
 
 static void save_ppm(const char* path) {

@@ -81,6 +81,7 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
     for (int i = 0; i < CAR_COUNT - 1; ++i) tops[i] = d.topMin + (d.topMax - d.topMin) * frand();
     std::sort(tops, tops + CAR_COUNT - 1, [](float a, float b) { return a > b; });
 
+    int ai = 0;     // index among the computer drivers (the player may sit on any grid slot in online races)
     for (int i = 0; i < CAR_COUNT; ++i) {
         Car& c = cars[i];
         c = Car();
@@ -93,8 +94,9 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
         c.x = col ? 0.45f : -0.45f;
         c.targetX = c.x;
         if (!c.isPlayer) {
-            c.topFactor = tops[i];
-            float rank = (CAR_COUNT - 2 - i) / (float)(CAR_COUNT - 2);   // 1 for pole
+            c.topFactor = tops[ai];
+            float rank = (CAR_COUNT - 2 - ai) / (float)(CAR_COUNT - 2);
+            ++ai;   // 1 for pole
             c.skill = d.skillMin + (d.skillMax - d.skillMin) * clampf(rank * 0.6f + frand() * 0.4f, 0, 1);
             c.accelF = d.accel * (0.92f + 0.16f * frand());
             c.laneBias = (frand() - 0.5f) * 0.9f;
@@ -122,6 +124,7 @@ void Race::update(float dt, const plat::Input& in) {
     for (int i = 0; i < CAR_COUNT; ++i) {
         Car& c = cars[i];
         if (c.isPlayer && !autopilot) updatePlayer(dt, in);
+        else if (c.remote) updateRemote(c, dt);
         else updateAI(c, dt);
     }
     if (autopilot) {   // keep engine/visual state alive for the camera car
@@ -365,6 +368,20 @@ void Race::updateAI(Car& c, float dt) {
     }
     if (fabsf(c.x) > 1.1f && c.speed > OFFROAD_LIMIT) c.speed -= OFFROAD_DECEL * dt;
     c.dist += c.speed * dt;
+}
+
+void Race::updateRemote(Car& c, float dt) {
+    // follow the last state received from the server: dead reckoning from the newest packet, eased so it never jumps
+    c.netAge += dt;
+    float age = fminf(c.netAge, 0.6f);
+    float target = c.netDist + c.netSpeed * age;
+    float k = fminf(1.0f, dt * 8.0f);
+    c.speed += (c.netSpeed - c.speed) * k;
+    c.dist += c.speed * dt;
+    c.dist += (target - c.dist) * k;
+    c.x += (c.netX - c.x) * k;
+    c.steerVis += (c.netSteer - c.steerVis) * k;
+    if (c.retired) c.speed = fmaxf(0.0f, c.speed - MAX_SPEED * 0.35f * dt);
 }
 
 void Race::addDamage(float d) {

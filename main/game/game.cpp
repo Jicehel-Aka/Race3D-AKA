@@ -5,6 +5,7 @@
 #include "render.h"
 #include "sprites.h"
 #include "music.h"
+#include "online.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -13,7 +14,7 @@ using namespace gfx;
 
 namespace {
 
-enum State { ST_TITLE, ST_COUNTDOWN, ST_RACING, ST_FINISHED, ST_RESULTS };
+enum State { ST_TITLE, ST_COUNTDOWN, ST_RACING, ST_FINISHED, ST_RESULTS, ST_ONLINE };
 
 struct Records {
     uint32_t magic;
@@ -43,7 +44,7 @@ bool g_paused = false;
 int g_pauseSel = 0;
 
 int g_menuSel = 4;
-constexpr int MENU_ITEMS = 5;   // track, difficulty, laps, music, start
+constexpr int MENU_ITEMS = 6;   // track, difficulty, laps, music, start, online
 volatile bool g_titleRequest = false;
 int g_track = 0, g_diff = DIFF_NORMAL, g_lapsSel = 2;
 const int kLaps[] = { 1, 2, 3, 5 };
@@ -53,6 +54,15 @@ float g_msgT = 0;
 uint16_t g_msgTop = 0, g_msgBot = 0;
 bool g_newLapRecord = false, g_newRaceRecord = false;
 int g_countBeep = 0;
+
+// online races
+bool g_online = false;            // a connection is open (lobby / race)
+bool g_onlineRace = false;        // the current race is an online one
+bool g_cfgSent = false, g_lost = false;
+int g_loadRes = 0;
+online::Settings g_set;
+float g_telemT = 0;
+int g_lastPhase = 0;
 
 const char* const kDiffDesc[DIFF_COUNT] = {
     "Relaxed rivals who make mistakes",
@@ -86,6 +96,7 @@ void load_records() {
 void apply_music_volume() { plat::setMusicVolume(g_rec.musicOff ? 0.0f : 0.8f); }
 
 void start_demo() {
+    g_race.playerIdx = CAR_COUNT - 1;
     plat::playMusic(g_trackDefs[g_track].music);
     g_race.setup(g_track, DIFF_HARD, 99, true);
     g_race.cameraZ();
@@ -94,12 +105,20 @@ void start_demo() {
     fx_clear();
 }
 
+void leave_online() {
+    if (g_online) online::end();
+    g_online = false; g_onlineRace = false;
+}
+
 void go_title() {
+    leave_online();
     g_state = ST_TITLE; g_stateT = 0; g_paused = false;
     start_demo();
 }
 
 void start_race() {
+    g_onlineRace = false;
+    g_race.playerIdx = CAR_COUNT - 1;
     g_race.setup(g_track, g_diff, kLaps[g_lapsSel], false);
     plat::playMusic(g_trackDefs[g_track].music, true);
     fx_clear();
@@ -112,6 +131,7 @@ void start_race() {
 void finish_race() {
     g_race.estimateUnfinished();
     const Car& p = g_race.player();
+    if (g_onlineRace) { g_newLapRecord = g_newRaceRecord = false; g_state = ST_RESULTS; g_stateT = 0; return; }
     if (!p.retired && p.bestLap > 0 && (g_rec.bestLap[g_track] == 0 || p.bestLap < g_rec.bestLap[g_track])) {
         g_rec.bestLap[g_track] = p.bestLap; g_newLapRecord = true;
     }
@@ -121,6 +141,63 @@ void finish_race() {
     if (bp == 0 || p.place < bp) bp = (uint8_t)p.place;
     plat::saveBlob(&g_rec, sizeof g_rec);
     g_state = ST_RESULTS; g_stateT = 0;
+}
+
+void start_online_race() {
+    const online::Info& in = online::info();
+    g_track = in.track % TRACK_COUNT;
+    for (int i = 0; i < 4; ++i) if (kLaps[i] == in.laps) g_lapsSel = i;
+    g_race.playerIdx = in.slot;
+    g_race.setup(g_track, g_diff, in.laps, false);
+    for (int i = 0; i < CAR_COUNT; ++i) {
+        Car& c = g_race.cars[i];
+        if (c.isPlayer) continue;
+        c.remote = true;
+        c.netDist = c.dist; c.netX = c.x; c.netSpeed = 0; c.netSteer = 0; c.netAge = 0;
+    }
+    plat::playMusic(g_trackDefs[g_track].music, true);
+    fx_clear();
+    g_onlineRace = true; g_lost = false; g_telemT = 0; g_paused = false;
+    g_state = ST_COUNTDOWN; g_stateT = 0;
+    g_countBeep = 0; g_msgT = 0;
+    g_newLapRecord = g_newRaceRecord = false;
+    plat::playSfx(plat::SFX_MENU_OK);
+}
+
+void enter_online_lobby() {
+    g_onlineRace = false;
+    g_state = ST_ONLINE; g_stateT = 0; g_paused = false;
+    g_lastPhase = online::info().phase;
+    start_demo();
+}
+
+void go_online() {
+    g_loadRes = online::loadSettings(g_set);
+    g_cfgSent = false;
+    if (g_loadRes == online::LOAD_OK) { online::begin(g_set); g_online = true; }
+    g_state = ST_ONLINE; g_stateT = 0; g_lastPhase = 0;
+    plat::playSfx(plat::SFX_MENU_OK);
+}
+
+// when the link drops during a race the other cars go back to the local AI
+void online_lost() {
+    if (g_lost) return;
+    g_lost = true;
+    for (int i = 0; i < CAR_COUNT; ++i) {
+        Car& c = g_race.cars[i];
+        if (c.remote) { c.remote = false; c.targetX = c.x; c.retired = false; }
+    }
+    message("CONNECTION LOST", rgb(255, 120, 100), rgb(160, 20, 10), 3.0f);
+}
+
+// online per-frame work during a race: read the network, follow the other cars, send ours at 20 Hz
+void online_tick(float dt) {
+    online::poll();
+    if (!g_lost && !online::isOnline()) { online_lost(); return; }
+    if (g_lost) return;
+    online::feed(g_race);
+    g_telemT += dt;
+    if (g_telemT >= 0.05f) { g_telemT = fmodf(g_telemT, 0.05f); online::sendTelemetry(g_race); }
 }
 
 // ------------------------------------------------------------ drawing helpers
@@ -158,7 +235,7 @@ void draw_title() {
     for (int y = 0; y < 70; ++y) blendRect(0, y, W, 1, rgb(0, 0, 0), (70 - y) * 2);
     draw_logo(10);
 
-    const int px = 24, py = 112, pw = W - 48, ph = 122;
+    const int px = 24, py = 112, pw = W - 48, ph = 126;
     panel(px, py, pw, ph);
     char buf[48];
     const char* labels[4] = { "TRACK", "DIFFICULTY", "LAPS", "MUSIC" };
@@ -181,22 +258,29 @@ void draw_title() {
         if (i == 1) { const uint16_t dc[] = { rgb(120, 255, 140), rgb(140, 210, 255), rgb(255, 190, 70), rgb(255, 80, 80) }; vc = dc[g_diff]; }
         textOutline(vx + 66 - textWidth(v) / 2, y, v, vc, rgb(0, 0, 0));
     }
-    text(px + 12, py + 68, kDiffDesc[g_diff], rgb(150, 150, 180));
+    text(px + 12, py + 65, kDiffDesc[g_diff], rgb(150, 150, 180));
 
     // records for the selection
     char t[16];
     if (g_rec.bestLap[g_track] > 0) { format_time(t, g_rec.bestLap[g_track]); snprintf(buf, sizeof buf, "LAP RECORD %s", t); }
     else snprintf(buf, sizeof buf, "LAP RECORD --'--\"--");
-    text(px + 12, py + 80, buf, rgb(255, 220, 110));
+    text(px + 12, py + 76, buf, rgb(255, 220, 110));
     uint8_t bp = g_rec.bestPlace[g_track][g_diff];
-    if (bp) { snprintf(buf, sizeof buf, "BEST: P%d", bp); text(px + pw - 12 - textWidth(buf), py + 80, buf, rgb(255, 220, 110)); }
+    if (bp) { snprintf(buf, sizeof buf, "BEST: P%d", bp); text(px + pw - 12 - textWidth(buf), py + 76, buf, rgb(255, 220, 110)); }
 
     bool sel = g_menuSel == 4;
     const char* go = "START RACE";
     int k = sel ? (int)(sinf(g_time * 6) * 60 + 196) : 140;
     int sw = textWidth(go, 2);
-    if (sel) blendRect(W / 2 - sw / 2 - 10, py + 96, sw + 20, 20, rgb(255, 60, 40), 120);
-    textFancy(W / 2 - sw / 2, py + 98, go, scale(rgb(255, 255, 255), k), scale(rgb(255, 210, 60), k), rgb(40, 0, 0), 2);
+    if (sel) blendRect(W / 2 - sw / 2 - 10, py + 87, sw + 20, 20, rgb(255, 60, 40), 120);
+    textFancy(W / 2 - sw / 2, py + 89, go, scale(rgb(255, 255, 255), k), scale(rgb(255, 210, 60), k), rgb(40, 0, 0), 2);
+    {   // online race entry
+        bool on = g_menuSel == 5;
+        const char* ol = "ONLINE RACE (WI-FI)";
+        int ow = textWidth(ol);
+        if (on) blendRect(W / 2 - ow / 2 - 8, py + 109, ow + 16, 13, rgb(60, 160, 255), 120);
+        text(W / 2 - ow / 2, py + 112, ol, on ? rgb(255, 255, 255) : rgb(150, 190, 235));
+    }
 }
 
 void draw_lights() {
@@ -234,7 +318,7 @@ void draw_pause() {
     darkRect(0, 0, W, H);
     panel(W / 2 - 80, 70, 160, 100);
     textCentered(W / 2, 80, "PAUSED", rgb(255, 230, 90), rgb(0, 0, 0), 3);
-    const char* items[3] = { "RESUME", "RESTART", "QUIT TO MENU" };
+    const char* items[3] = { "RESUME", g_onlineRace ? "(LIVE RACE)" : "RESTART", g_onlineRace ? "LEAVE THE RACE" : "QUIT TO MENU" };
     for (int i = 0; i < 3; ++i) {
         int y = 116 + i * 16;
         bool sel = g_pauseSel == i;
@@ -282,7 +366,70 @@ void draw_results() {
     textCentered(W / 2, 198, buf, p.place == 1 ? rgb(255, 230, 60) : rgb(255, 255, 255), rgb(0, 0, 0), 2);
     if ((g_newLapRecord || g_newRaceRecord) && ((int)(g_time * 3) & 1))
         textCentered(W / 2, 216, g_newRaceRecord ? "NEW RACE RECORD!" : "NEW LAP RECORD!", rgb(120, 255, 160), rgb(0, 0, 0));
-    if (g_stateT > 1.5f) text(W / 2 - textWidth("A: RACE AGAIN   B: MENU") / 2, 230, "A: RACE AGAIN   B: MENU", rgb(200, 200, 230));
+    if (g_stateT > 1.5f) { const char* f = g_onlineRace ? "A: BACK TO LOBBY   B: LEAVE" : "A: RACE AGAIN   B: MENU"; text(W / 2 - textWidth(f) / 2, 230, f, rgb(200, 200, 230)); }
+}
+
+void draw_online() {
+    render_world(g_race, g_time);
+    darkRect(0, 0, W, H);
+    const char* title = "ONLINE RACE";
+    textFancy(W / 2 - textWidth(title, 3) / 2, 6, title, rgb(170, 230, 255), rgb(60, 130, 255), rgb(0, 0, 30), 3);
+    panel(12, 34, W - 24, 196);
+    const online::Info& in = online::info();
+    int st = online::status();
+    char buf[64];
+    const uint16_t white = rgb(255, 255, 255), grey = rgb(150, 150, 190);
+    if (g_loadRes != online::LOAD_OK) {
+        textCentered(W / 2, 46, g_loadRes == online::LOAD_NO_FILE ? "SETTINGS FILE NOT FOUND" : "NO WI-FI NAME IN THE FILE", rgb(255, 150, 110), rgb(0, 0, 0));
+        text(24, 66, "Create this text file on the SD card:", grey);
+        text(24, 80, online::settingsPath(), rgb(255, 230, 120));
+        text(24, 100, "ssid=MyWifiName", white);
+        text(24, 112, "pass=MyWifiPassword", white);
+        text(24, 124, "room=AKA1", white);
+        text(24, 136, "name=PILOT", white);
+        text(24, 156, "The public race server is already filled in.", grey);
+        text(24, 168, "Friends use the same room name to race together.", grey);
+        text(24, 180, "See online.example.txt in the sdcard pack.", grey);
+        text(W / 2 - textWidth("B: BACK") / 2, 214, "B: BACK", rgb(200, 200, 230));
+        return;
+    }
+    // status line
+    const char* msg = "";
+    uint16_t mc = rgb(255, 230, 120);
+    if (st == plat::NET_WIFI) msg = "JOINING WI-FI...";
+    else if (st == plat::NET_CONNECTING) msg = "CONNECTING TO THE SERVER...";
+    else if (st == plat::NET_ONLINE && !in.haveSnap) msg = "ENTERING THE ROOM...";
+    else if (st == plat::NET_ONLINE) { snprintf(buf, sizeof buf, "ROOM %s - %s", g_set.room, in.host ? "YOU ARE THE HOST" : "WAITING FOR THE HOST"); msg = buf; mc = rgb(140, 255, 170); }
+    else if (st == plat::NET_FAILED) { snprintf(buf, sizeof buf, "ERROR: %s", plat::netError()); msg = buf; mc = rgb(255, 130, 110); }
+    else msg = "...";
+    textCentered(W / 2, 42, msg, mc, rgb(0, 0, 0));
+    if (st == plat::NET_CONNECTING && g_stateT > 6) text(W / 2 - textWidth("The free server may need a minute to wake up.") / 2, 54, "The free server may need a minute to wake up.", grey);
+    if (in.haveSnap) {
+        snprintf(buf, sizeof buf, "%s  -  %d LAP%s", g_trackDefs[in.track % TRACK_COUNT].name, in.laps, in.laps > 1 ? "S" : "");
+        textCentered(W / 2, 56, buf, white, rgb(0, 0, 0));
+        for (int i = 0; i < CAR_COUNT; ++i) {
+            const Car& c = g_race.cars[i];
+            int y = 72 + i * 15;
+            bool me = in.haveWelcome && i == in.slot;
+            bool human = (in.humanMask >> i) & 1;
+            if (me) blendRect(16, y - 3, W - 32, 14, rgb(255, 200, 40), 90);
+            fillRect(24, y, 12, 8, c.livery.body);
+            rect(24, y, 12, 8, c.livery.stripe);
+            snprintf(buf, sizeof buf, "%d", i + 1);
+            text(42, y, buf, grey);
+            textOutline(60, y, c.name, white, rgb(0, 0, 0));
+            const char* tag = me ? (in.host ? "YOU (HOST)" : "YOU") : (human ? "PLAYER" : "COMPUTER");
+            uint16_t tc = me ? rgb(255, 240, 120) : (human ? rgb(120, 255, 160) : rgb(130, 130, 160));
+            text(150, y, tag, tc);
+        }
+    }
+    const char* hint = "B: LEAVE";
+    if (st == plat::NET_ONLINE && in.haveSnap) {
+        if (in.phase != online::PH_LOBBY) hint = "RACE IN PROGRESS...";
+        else if (in.host) { hint = "A: START RACE   B: LEAVE"; const char* h2 = "LEFT/RIGHT: TRACK   UP/DOWN: LAPS"; text(W / 2 - textWidth(h2) / 2, 204, h2, grey); }
+        else hint = "WAITING FOR THE HOST...";
+    }
+    text(W / 2 - textWidth(hint) / 2, 216, hint, rgb(200, 200, 230));
 }
 
 void audio_update() {
@@ -375,7 +522,7 @@ void game_init() {
     go_title();
 }
 
-bool game_paused() { return g_paused || g_state == ST_TITLE || g_state == ST_RESULTS; }
+bool game_paused() { return g_paused || g_state == ST_TITLE || g_state == ST_RESULTS || g_state == ST_ONLINE; }
 
 Race* game_debug_race() { return &g_race; }
 void game_debug_select(int track, int difficulty, int lapsIndex) {
@@ -407,6 +554,7 @@ void game_frame(const plat::Input& in, float dt) {
             if (g_menuSel == 3) { g_rec.musicOff ^= 1; apply_music_volume(); plat::saveBlob(&g_rec, sizeof g_rec); }
         }
         if (in.pressed & (plat::BTN_A | plat::BTN_RUN)) {
+            if (g_menuSel == 5 && (in.pressed & plat::BTN_A)) { go_online(); break; }
             if (g_menuSel == 4 || (in.pressed & plat::BTN_RUN)) { start_race(); break; }
             if (g_menuSel == 3) { g_rec.musicOff ^= 1; apply_music_volume(); plat::saveBlob(&g_rec, sizeof g_rec); }
             else g_menuSel = 4;
@@ -424,6 +572,7 @@ void game_frame(const plat::Input& in, float dt) {
             g_state = ST_RACING;
             message("GO!", rgb(160, 255, 160), rgb(20, 200, 60), 1.2f);
         }
+        if (g_onlineRace) online_tick(dt);
         g_race.update(dt, in);
         render_world(g_race, g_time);
         render_hud(g_race, g_time);
@@ -440,14 +589,15 @@ void game_frame(const plat::Input& in, float dt) {
             if (in.pressed & plat::BTN_A) {
                 plat::playSfx(plat::SFX_MENU_OK);
                 if (g_pauseSel == 0) g_paused = false;
-                else if (g_pauseSel == 1) { g_paused = false; start_race(); break; }
+                else if (g_pauseSel == 1) { g_paused = false; if (!g_onlineRace) { start_race(); break; } }
                 else { go_title(); break; }
             }
         }
-        if (!g_paused) {
+        if (!g_paused || g_onlineRace) {      // a live online race never freezes
+            if (g_onlineRace) online_tick(dt);
             // fixed physics step
             for (float t = dt; t > 1e-4f; t -= 1.0f / 60) {
-                g_race.update(fminf(t, 1.0f / 60), in);
+                g_race.update(fminf(t, 1.0f / 60), g_paused ? none : in);
                 handle_events();
             }
             fx_update(g_race, dt);
@@ -465,10 +615,40 @@ void game_frame(const plat::Input& in, float dt) {
         if (g_paused) draw_pause();
         break;
     }
+    case ST_ONLINE: {
+        const online::Info& oi = online::info();
+        if (g_online) online::poll();
+        if (g_online && online::isOnline() && oi.haveWelcome && oi.host && !g_cfgSent) {
+            g_cfgSent = true;
+            online::sendConfigure(g_track, kLaps[g_lapsSel], g_diff);
+        }
+        bool ready = g_online && online::isOnline() && oi.haveSnap;
+        if (ready && oi.phase == online::PH_COUNTDOWN && g_lastPhase != online::PH_COUNTDOWN) { start_online_race(); break; }
+        g_lastPhase = oi.phase;
+        if (ready && !oi.host) {             // follow what the host chose
+            if (g_track != oi.track % TRACK_COUNT) { g_track = oi.track % TRACK_COUNT; start_demo(); }
+        }
+        if (in.pressed & (plat::BTN_B | plat::BTN_RUN)) { plat::playSfx(plat::SFX_MENU_OK); go_title(); break; }
+        if (ready && oi.host && oi.phase == online::PH_LOBBY) {
+            int d = (in.pressed & plat::BTN_RIGHT) ? 1 : ((in.pressed & plat::BTN_LEFT) ? -1 : 0);
+            int u = (in.pressed & plat::BTN_DOWN) ? 1 : ((in.pressed & plat::BTN_UP) ? -1 : 0);
+            if (d) { g_track = (g_track + d + TRACK_COUNT) % TRACK_COUNT; start_demo(); plat::playSfx(plat::SFX_MENU_MOVE); online::sendConfigure(g_track, kLaps[g_lapsSel], g_diff); }
+            if (u) { g_lapsSel = (g_lapsSel + u + 4) % 4; plat::playSfx(plat::SFX_MENU_MOVE); online::sendConfigure(g_track, kLaps[g_lapsSel], g_diff); }
+            if (in.pressed & plat::BTN_A) { plat::playSfx(plat::SFX_MENU_OK); online::sendStart(); }
+        }
+        for (float t = dt; t > 0; t -= 1.0f / 60) g_race.update(fminf(t, 1.0f / 60), none);
+        draw_online();
+        break;
+    }
     case ST_RESULTS: {
         for (float t = dt; t > 1e-4f; t -= 1.0f / 60) g_race.update(fminf(t, 1.0f / 60), none);
+        if (g_onlineRace) { online::poll(); if (!online::isOnline()) { go_title(); break; } }
         if (g_stateT > 1.0f) {
-            if (in.pressed & plat::BTN_A) start_race();
+            if (g_onlineRace) {
+                if (in.pressed & plat::BTN_A) { plat::playSfx(plat::SFX_MENU_OK); if (online::info().host) online::sendLobby(); enter_online_lobby(); break; }
+                if (in.pressed & (plat::BTN_B | plat::BTN_RUN)) { plat::playSfx(plat::SFX_MENU_OK); go_title(); break; }
+            }
+            else if (in.pressed & plat::BTN_A) start_race();
             else if (in.pressed & (plat::BTN_B | plat::BTN_RUN)) { plat::playSfx(plat::SFX_MENU_OK); go_title(); }
         }
         if (g_state == ST_RESULTS) draw_results();
