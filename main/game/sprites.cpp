@@ -1516,9 +1516,10 @@ void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, 
     if (stage > 0) { int w3 = dw * CAR_ART3Q_W / CAR_ART_W; x -= (w3 - dw) / 2; dw = w3; }
     const CarMip& mp = mips[2];                                   // smallest picture is enough for a silhouette
     if (dw > 512) return;
-    static int bot[512];
+    static int* bot = nullptr;                                    // PSRAM: internal DRAM is full
+    if (!bot) { bot = (int*)plat::allocLarge(2 * 512 * sizeof(int)); if (!bot) return; }
+    int* fill = bot + 512;
     const int stepX = (mp.w << 16) / dw;
-    const int tyre = dh * 3 / 100;                                // the picture has a diffuser a little below the tyres
     int lo = dw, hi = -1;
     for (int k = 0; k < dw; ++k) {
         int sxf = k * stepX + (stepX >> 1);
@@ -1527,28 +1528,28 @@ void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, 
         int r = mp.h - 1;
         while (r >= 0 && mp.px[r * mp.w + sx] == CAR_ART_KEY) --r;
         if (r < 0) { bot[k] = -100000; continue; }
-        bot[k] = y + (r + 1) * dh / mp.h - tyre;
+        bot[k] = y + (r + 1) * dh / mp.h;
         if (k < lo) lo = k;
         hi = k;
     }
     if (hi < lo) return;
-    const int R = dw * 10 / 100 + 1;                              // bridge the gaps between the wheels with the tyre level
-    static int fill[512];
+    // the sun is high and in front of the car: the shadow is the car's footprint thrown behind it, i.e. below the
+    // silhouette on the screen, with the same outline (wheels, body, far side higher in a turn)
+    const int R = dw * 2 / 100 + 1;
     for (int k = 0; k < dw; ++k) {
         int m = -100000;
         for (int q = k - R; q <= k + R; ++q) if (q >= lo && q <= hi && bot[q] > m) m = bot[q];
         fill[k] = m;
     }
-    const int ry = dh * 9 / 100 + 1;
-    const float half = (hi - lo + 1) * 0.5f, mid = (lo + hi) * 0.5f;
+    const int depth = dh * 9 / 100 + 2, up = dh * 3 / 100;
     for (int k = lo; k <= hi; ++k) {
         int i = x + k;
         if (i < 0 || i >= gfx::W || fill[k] < -1000) continue;
-        float t = (k - mid) / half;
-        float f = sqrtf(fmaxf(0.0f, 1.0f - t * t * t * t));        // soft, rounded ends
-        int h = (int)(ry * 1.5f * f) + 1;
-        int j0 = fill[k] - h, j1 = fill[k] + ry / 2;
-        for (int j = j0 < 0 ? 0 : j0; j <= j1 && j < clipY && j < gfx::H; ++j) gfx::fb[j * gfx::W + i] = gfx::scale(gfx::fb[j * gfx::W + i], 110);
+        for (int j = fill[k] - up; j <= fill[k] + depth; ++j) {
+            if (j < 0 || j >= clipY || j >= gfx::H) continue;
+            int t = (j - (fill[k] - up)) * 64 / (depth + up + 1);          // 0 under the car .. 63 at the far edge
+            gfx::fb[j * gfx::W + i] = gfx::scale(gfx::fb[j * gfx::W + i], 100 + t * 2);
+        }
     }
 }
 
