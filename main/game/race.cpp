@@ -73,7 +73,7 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
     nitro = 1.0f; nitroOn = false; steer = 0;
     skyOffset = nearOffset = 0; shake = 0; offroad = skid = 0;
     gear = 1; rpm = 0;
-    pitting = false; pitT = 0; damage = 0; perf = 1; sputter = 0; sputterNext = 2; damageCool = 0; smokeT = 0; spinT = 0;
+    pitting = false; pitT = 0; activeBay = 0; lollipop = 0; lollipopT = 0; launchBoostT = 0; onApron = false; damage = 0; perf = 1; sputter = 0; sputterNext = 2; damageCool = 0; smokeT = 0; spinT = 0;
     const DiffProfile& d = kDiff[diff];
 
     // AI drivers: random strengths, strongest on pole
@@ -132,19 +132,44 @@ void Race::update(float dt, const plat::Input& in) {
     }
 
     collisions(dt);
-    // pit stop: stop in the box of the pit lane (right side, just after the line) to get the engine repaired
+    // pit lane v1.2: three bays along the apron
     {
         static const float kRepair[DIFF_COUNT] = { 0.34f, 0.26f, 0.20f, 0.16f };     // damage repaired per second
         int pidx = track.indexAt(carZ(p));
-        bool inBox = pidx >= PIT_BOX0 && pidx < PIT_BOX1 && p.x > PIT_X0 && p.x < PIT_X1;
-        bool on = !autopilot && !demo && started && inBox && speedKmh() < 30.0f && !p.retired && (damage > 0.0f || nitro < 1.0f);
-        if (on) {
-            if (!pitting) { pitting = true; pitT = 0; if (damage > 0.02f) ev.pitStart = true; }
-            pitT += dt;
-            nitro = fminf(1.0f, nitro + dt * 0.5f);
-            if (damage > 0) { damage -= kRepair[difficulty] * dt; if (damage <= 0) { damage = 0; ev.pitDone = true; } }
-            if (damage <= 0 && nitro >= 1.0f) pitting = false;
-        } else pitting = false;
+        float kmh = speedKmh();
+        bool ok = !autopilot && !demo && started && !p.retired && inPitZone(p);
+        if (!ok) {
+            if (activeBay || pitting) { pitting = false; activeBay = 0; }
+            if (lollipop && !inPitZone(p)) lollipop = 0;
+        } else {
+            if (lollipopT > 0) { lollipopT -= dt; if (lollipopT <= 0 && lollipop == 3) lollipop = 0; }
+            if (lollipop == 3 && lollipopT > 0 && pidx > PIT_BAY_ENGINE1 && (in.held & plat::BTN_A)) {     // GO! : launch boost
+                launchBoostT = 1.35f; lollipopT = 0; lollipop = 0; plat::playSfx(plat::SFX_NITRO);
+            }
+            bool was = pitting;
+            pitting = false;
+            if (pidx >= PIT_BAY_NITRO0 && pidx <= PIT_BAY_NITRO1) {                  // 1: N2O EXPRESS, no need to stop
+                activeBay = 1;
+                if (kmh <= 95.0f && nitro < 1.0f) { pitting = true; nitro = fminf(1.0f, nitro + dt * 1.35f); }
+            } else if (pidx >= PIT_BAY_CHASSIS0 && pidx <= PIT_BAY_CHASSIS1) {      // 2: TYRES & TRACKING: no more pull, half of the damage repaired
+                activeBay = 2;
+                if (kmh <= 38.0f && damage > 0.30f) {
+                    pitting = true; lollipop = 1;
+                    damage = fmaxf(0.30f, damage - kRepair[difficulty] * 1.3f * dt);
+                    if (damage <= 0.30f) { pullDir = 0; lollipop = 2; ev.pitDone = true; }
+                }
+            } else if (pidx >= PIT_BAY_ENGINE0 && pidx <= PIT_BAY_ENGINE1) {        // 3: ENGINE GARAGE: everything back to new
+                activeBay = 3;
+                if (kmh <= 30.0f && (damage > 0.0f || nitro < 0.99f)) {
+                    if (!was) { pitT = 0; if (damage > 0.02f) ev.pitStart = true; }
+                    pitting = true; pitT += dt;
+                    nitro = fminf(1.0f, nitro + dt * 0.65f);
+                    if (damage > 0) damage = fmaxf(0.0f, damage - kRepair[difficulty] * dt);
+                    lollipop = damage < 0.08f ? 2 : 1;
+                    if (damage <= 0.0f && nitro >= 0.99f) { pullDir = 0; lollipop = 3; lollipopT = 2.4f; ev.pitDone = true; }
+                }
+            } else activeBay = 0;
+        }
     }
     for (auto& c : cars) laps_(c);
     ranking();
@@ -171,6 +196,11 @@ void Race::update(float dt, const plat::Input& in) {
     rpm += (target - rpm) * fminf(1, dt * 12);
 }
 
+bool Race::inPitZone(const Car& c) const {      // on the apron (right of the pit wall) along the pit lane
+    int i = track.indexAt(carZ(c));
+    return i >= PIT_ENTRY && i <= PIT_END && c.x > PIT_WALL_X + 0.03f && c.x < PIT_LANE_X1 + 0.12f;
+}
+
 void Race::updatePlayer(float dt, const plat::Input& in) {
     Car& p = player();
     if (!started) { p.speed = 0; return; }
@@ -193,6 +223,7 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     else nitro = fminf(1.0f, nitro + dt / 28.0f);
     if (nitroOn && !wasOn) plat::playSfx(plat::SFX_NITRO);
 
+    const float oldX = p.x;
     float dx = dt * 2.0f * pct;
     p.x += dx * steer;
     p.x -= dx * pct * seg.curve * CENTRIFUGAL;
@@ -213,15 +244,28 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     } else sputter = 0;
     if (damage > 0.5f && p.speed > MAX_SPEED * 0.1f) p.x += pullDir * (damage - 0.5f) * 0.55f * pct * dt;
     if (nitroOn && damage > 0.8f) nitroOn = false;
-    float maxS = MAX_SPEED * perf * (nitroOn ? NITRO_BOOST : 1.0f);
-    if (gas) p.speed += ACCEL * dt * (nitroOn ? 1.9f : 1.0f) * (1.0f - 0.55f * pct * pct) * (0.3f + 0.7f * perf);
+    onApron = inPitZone(p);
+    if (onApron) nitroOn = false;
+    if (launchBoostT > 0) launchBoostT -= dt;
+    float maxS = MAX_SPEED * perf * (nitroOn || launchBoostT > 0 ? NITRO_BOOST : 1.0f);
+    if (onApron) maxS = fminf(maxS, MAX_SPEED * PIT_LIMIT_KMH / 240.0f);                 // pit lane speed limiter
+    if (gas) p.speed += ACCEL * dt * (nitroOn || launchBoostT > 0 ? 1.9f : 1.0f) * (1.0f - 0.55f * pct * pct) * (0.3f + 0.7f * perf);
     else if (brake) p.speed -= BRAKING * dt;
     else p.speed -= DECEL * dt;
     if (gas && brake) p.speed -= BRAKING * dt * 0.5f;
 
     float ax = fabsf(p.x);
     offroad = ax > 1.12f ? 1.0f : (ax > 1.0f ? 0.35f : 0.0f);
-    if (ax > 1.12f && p.speed > OFFROAD_LIMIT) p.speed -= OFFROAD_DECEL * dt;
+    {   // pit wall: a concrete wall between the road and the apron (side decided by where the car came from)
+        int widx = track.indexAt(carZ(p));
+        if (widx >= PIT_WALL_FIRST && widx <= PIT_WALL_END) {
+            if (oldX < PIT_WALL_X && p.x > PIT_WALL_X - 0.045f) { p.x = PIT_WALL_X - 0.045f; if (p.speed > MAX_SPEED * 0.1f) { p.speed -= MAX_SPEED * 0.5f * dt; shake = fmaxf(shake, 0.15f); } }
+            else if (oldX >= PIT_WALL_X && p.x < PIT_WALL_X + 0.045f) { p.x = PIT_WALL_X + 0.045f; if (p.speed > MAX_SPEED * 0.1f) { p.speed -= MAX_SPEED * 0.5f * dt; shake = fmaxf(shake, 0.15f); } }
+        }
+    }
+    ax = fabsf(p.x);
+    if (inPitZone(p) || (ax > 1.0f && ax < PIT_LANE_X1 + 0.12f && track.indexAt(carZ(p)) >= PIT_ENTRY && track.indexAt(carZ(p)) <= PIT_END)) offroad = 0;   // the apron is tarmac
+    else if (ax > 1.12f && p.speed > OFFROAD_LIMIT) p.speed -= OFFROAD_DECEL * dt;
     if (p.retired) p.speed -= MAX_SPEED * 0.35f * dt;          // dead engine: coast down
     if (p.speed > maxS) p.speed -= MAX_SPEED * (damage > 0.25f ? 0.25f : 0.4f) * dt;   // bleed off after nitro / damage
     if (p.speed < 0) p.speed = 0;

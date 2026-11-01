@@ -417,6 +417,8 @@ void draw_layers(const Race& r, int baseY) {
 }
 
 // ------------------------------------------------------------------ road
+float s_time = 0;
+
 void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg) {
     bool light = ((ps.idx / RUMBLE_LEN) & 1) == 0;
     int f = ps.fog;
@@ -472,19 +474,23 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
                 }
             }
         }
-        if (!start && ps.idx >= PIT_FIRST && ps.idx < PIT_FIRST + PIT_LEN) {     // pit lane on the right of the road
-            bool box = ps.idx >= PIT_BOX0 && ps.idx < PIT_BOX1;
-            float a = cx + w * PIT_X0, b = cx + w * PIT_X1;
-            uint16_t pc = box ? lerp(road, rgb(250, 200, 30), 150) : lerp(road, rgb(120, 130, 150), 90);
-            if (box && ((ps.idx + (int)(t * 2)) & 1)) pc = lerp(road, rgb(250, 120, 30), 120);
-            span(a, b, lerp(pc, th.fog, f));
-            uint16_t wl = lerp(rgb(245, 245, 245), th.fog, f);
-            span(a - lw, a + lw, wl);
-            span(b - lw, b + lw, wl);
-            if (ps.idx == PIT_FIRST || ps.idx == PIT_BOX0 || ps.idx == PIT_BOX1 - 1) span(a, b, wl);
-        }
         span(r0, r1, rumble);
         span(r1, W, grass);
+        if (!start && ps.idx >= PIT_ENTRY && ps.idx <= PIT_END) {                  // pit apron (v1.2): outside the road, behind a concrete wall
+            float taper = 1.0f;
+            if (ps.idx < PIT_WALL_FIRST) taper = (float)(ps.idx - PIT_ENTRY) / (PIT_WALL_FIRST - PIT_ENTRY);
+            else if (ps.idx > PIT_WALL_END) taper = 1.0f - (float)(ps.idx - PIT_WALL_END) / (PIT_END - PIT_WALL_END);
+            float ax0 = cx + w * 1.02f, ax1 = cx + w * (1.02f + 1.02f * taper);
+            bool pulse = (ps.idx + (int)(s_time * 6)) & 1;
+            uint16_t ac = rgb(62, 68, 84);
+            if (ps.idx >= PIT_BAY_NITRO0 && ps.idx <= PIT_BAY_NITRO1) ac = pulse ? rgb(24, 188, 232) : rgb(22, 134, 178);
+            else if (ps.idx >= PIT_BAY_CHASSIS0 && ps.idx <= PIT_BAY_CHASSIS1) ac = pulse ? rgb(242, 192, 34) : rgb(192, 148, 28);
+            else if (ps.idx >= PIT_BAY_ENGINE0 && ps.idx <= PIT_BAY_ENGINE1) ac = pulse ? rgb(226, 56, 52) : rgb(168, 42, 46);
+            span(ax0, ax1, lerp(ac, th.fog, f));
+            span(ax1 - lw, ax1 + lw, lerp(rgb(245, 245, 245), th.fog, f));
+            if (ps.idx >= PIT_WALL_FIRST && ps.idx <= PIT_WALL_END)
+                span(cx + w * (PIT_WALL_X - 0.035f), cx + w * (PIT_WALL_X + 0.035f), lerp((ps.idx & 1) ? rgb(245, 245, 245) : rgb(220, 56, 48), th.fog, f));
+        }
         // ground texture: world-fixed dashes (tufts, ripples, wind streaks, cracks, glints)
         if (ps.fog < 215 && tid != THEME_CITY) {
             int j8 = (int)(t * 8);
@@ -522,6 +528,51 @@ const uint16_t* lit_palette(const uint16_t* base, uint16_t emissive, int ambient
         s_tmpPal[i] = lerp(c, fogc, em ? fog / 2 : fog);
     }
     return s_tmpPal;
+}
+
+// pit lane scenery: entry board, canopy over the engine bay, two mechanics and the lollipop man
+void draw_pit_scenery(const Race& r, const PSeg& ps) {
+    if (ps.fog > 230 || ps.w1 < 14 || ps.w1 > 240) return;
+    const float w = ps.w1;
+    const int sy = (int)ps.y1;
+    auto px = [&](int x, int y, uint16_t c) { if (x >= 0 && x < W && y >= 0 && y < ps.clip) fb[y * W + x] = c; };
+    auto rect = [&](int x0, int y0, int x1, int y1, uint16_t c) { for (int y = y0; y < y1; ++y) for (int x = x0; x < x1; ++x) px(x, y, c); };
+    auto fogc = [&](uint16_t c) { return lerp(c, g_themes[r.track.theme].fog, ps.fog); };
+    if (ps.idx == PIT_ENTRY + 1) {                          // entry board with a blinking amber beacon
+        int x = (int)(ps.x1 + w * 1.06f), bw = (int)(w * 0.20f) + 3, bh = (int)(w * 0.12f) + 3;
+        rect(x + bw / 2 - 1, sy - bh - bh / 2, x + bw / 2 + 1, sy, fogc(rgb(140, 145, 155)));
+        rect(x, sy - bh - bh / 2, x + bw, sy - bh / 2, fogc(rgb(24, 148, 210)));
+        rect(x + 1, sy - bh - bh / 2 + 1, x + bw - 1, sy - bh / 2 - bh / 3, fogc(rgb(250, 250, 250)));
+        rect(x + bw / 4, sy - bh - bh / 2 + 2, x + bw * 3 / 4, sy - bh / 2 - bh / 3 - 1, fogc(rgb(24, 148, 210)));
+        if (((int)(s_time * 6)) & 1) rect(x + bw / 2 - 2, sy - bh - bh / 2 - 4, x + bw / 2 + 2, sy - bh - bh / 2 - 1, fogc(rgb(255, 195, 40)));
+    }
+    if (ps.idx == PIT_BAY_ENGINE0 + 1 || ps.idx == PIT_BAY_ENGINE1 - 1) {      // canopy posts over the engine bay
+        int x = (int)(ps.x1 + w * 1.98f), hh = (int)(w * 0.22f) + 4;
+        uint16_t roof = rgb(228, 48, 48);
+        rect(x, sy - hh, x + 2, sy, fogc(rgb(180, 186, 200)));
+        rect(x - (int)(w * 0.9f), sy - hh - 3, x + 3, sy - hh + 1, fogc(roof));
+        for (int k = x - (int)(w * 0.9f); k < x + 3; k += 8) rect(k, sy - hh - 3, k + 4, sy - hh + 1, fogc(rgb(248, 248, 252)));
+    }
+    if (ps.idx == PIT_BAY_ENGINE0 + 2 || ps.idx == PIT_BAY_ENGINE0 + 6) {      // crew: two mechanics (one each side of the car) step in when the car is serviced
+        int h = (int)(w * 0.14f) + 6, mw = h * 42 / 100 + 2;
+        bool work = r.pitting && r.activeBay == 3;
+        int bob = work ? ((int)(s_time * 14) & 1) : 0;
+        for (int m = 0; m < 2; ++m) {
+            float ux = m == 0 ? (work ? 1.30f : 1.14f) : (work ? 1.66f : 1.82f);       // road half-widths
+            int mx = (int)(ps.x1 + w * ux) - mw / 2, my = sy - h + bob;
+            for (int y = my; y < sy; ++y) {
+                float rel = (float)(y - my) / h;
+                uint16_t c = rel < 0.25f ? rgb(245, 245, 250) : rel < 0.68f ? rgb(230, 52, 46) : rgb(34, 38, 52);
+                for (int x = mx; x < mx + mw; ++x) px(x, y, fogc(c));
+            }
+        }
+        if (ps.idx == PIT_BAY_ENGINE0 + 2) {                                           // lollipop man: STOP (red) / READY (amber) / GO (green)
+            int lx = (int)(ps.x1 + w * 1.08f), ly = sy - (int)(h * 1.30f), rad = mw * 3 / 4 + 2;
+            uint16_t sc = r.lollipop == 3 ? rgb(52, 242, 115) : r.lollipop == 2 ? rgb(255, 210, 48) : rgb(245, 52, 48);
+            rect(lx, ly, lx + 1, sy, fogc(rgb(210, 215, 225)));
+            for (int dy = -rad; dy <= rad; ++dy) for (int dx = -rad; dx <= rad; ++dx) if (dx * dx + dy * dy <= rad * rad) px(lx + dx, ly + dy, fogc(sc));
+        }
+    }
 }
 
 void draw_prop(const Race& r, const PSeg& ps, const Prop& pr) {
@@ -574,11 +625,11 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
         const float u = (float)stage / (CAR_ART_MID + 1);   // 0 rear .. 1 three-quarter
         int dhA = dw * CAR_ART_H / CAR_ART_W;
         // the tyres touch the ground line of the old sprites (the picture has a diffuser below the tyres)
-        int ya = y + dh * 52 / 58 - dhA * (96 + (int)(4 * u + 0.5f)) / 100;
+        int ya = y + dh * 52 / 58 - dhA * 97 / 100;
         int pw = tq ? dw * CAR_ART3Q_W / CAR_ART_W : dw, px0 = tq ? x - (pw - dw) / 2 : x;
         // ground shadow: darkest right under the tyres
         {
-            int gy = ya + dhA * (96 + (int)(4 * u + 0.5f)) / 100;
+            int gy = ya + dhA * 97 / 100;
             int cx = px0 + pw / 2, ry = dhA * 9 / 100 + 1, rx = pw * 46 / 100, cy = gy - ry / 2;
             for (int j = cy - ry; j <= cy + ry; ++j) {
                 if (j < 0 || j >= clip || j >= H) continue;
@@ -644,6 +695,7 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
 
 // =================================================================== world
 void render_world(const Race& r, float time) {
+    s_time = time;
     const Track& tr = r.track;
     const Theme& th = g_themes[tr.theme];
     if (s_cacheTheme != tr.theme) build_theme_cache(tr.theme);
@@ -710,6 +762,7 @@ void render_world(const Race& r, float time) {
         if (!ps.valid) continue;
         const Seg& sg = tr.segs[ps.idx];
         for (int j = 0; j < sg.propCount; ++j) draw_prop(r, ps, tr.props[sg.propFirst + j]);
+        if (ps.idx >= PIT_ENTRY && ps.idx <= PIT_END) draw_pit_scenery(r, ps);
         for (int k = 0; k < CAR_COUNT; ++k) {
             const Car& c = r.cars[k];
             if (&c == &pl) continue;

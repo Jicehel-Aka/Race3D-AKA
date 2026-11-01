@@ -7,9 +7,13 @@
 
 constexpr int   CAR_COUNT = 8;
 constexpr float MAX_SPEED = SEG_LEN * 60.0f;     // 12000 units/s ~ 240 km/h
-// pit lane: right-hand side of the road, just after the start line (segment indices)
-constexpr int   PIT_FIRST = 8, PIT_LEN = 22, PIT_BOX0 = 14, PIT_BOX1 = 26;
-constexpr float PIT_X0 = 0.42f, PIT_X1 = 0.96f;
+// pit lane v1.2: separate apron on the right of the road, behind a concrete wall, three bays (segment indices)
+constexpr int   PIT_ENTRY = 3, PIT_WALL_FIRST = 10, PIT_WALL_END = 38, PIT_END = 44;
+constexpr float PIT_WALL_X = 1.04f, PIT_LANE_X1 = 1.96f;           // wall centre / far edge of the apron (road edge = 1.0)
+constexpr int   PIT_BAY_NITRO0 = 11, PIT_BAY_NITRO1 = 18;           // 1: N2O express, rolling (< 95 km/h)
+constexpr int   PIT_BAY_CHASSIS0 = 19, PIT_BAY_CHASSIS1 = 26;       // 2: tyres & tracking, slow (< 38 km/h)
+constexpr int   PIT_BAY_ENGINE0 = 27, PIT_BAY_ENGINE1 = 36;         // 3: full engine garage (< 30 km/h)
+constexpr float PIT_LIMIT_KMH = 85.0f;                              // speed limiter on the apron
 constexpr float CAM_HEIGHT = 1000.0f;
 constexpr float CAM_DEPTH = 0.8391f;             // 1 / tan(100deg / 2)
 constexpr float PLAYER_Z = CAM_HEIGHT * CAM_DEPTH;
@@ -88,8 +92,13 @@ public:
     float sputter = 0;                     // > 0 while the engine is cutting out
     float sputterNext = 2;
     float damageCool = 0;
-    bool  pitting = false;                 // stopped in the pit box, being repaired
+    bool  pitting = false;                 // being serviced in a bay
     float pitT = 0;
+    int   activeBay = 0;                   // 0 none, 1 N2O, 2 tyres & tracking, 3 engine garage
+    int   lollipop = 0;                    // 0 hidden, 1 STOP, 2 READY, 3 GO
+    float lollipopT = 0, launchBoostT = 0;
+    bool  onApron = false;                 // player is on the pit apron (speed limiter, no grass penalty)
+    bool  inPitZone(const Car& c) const;
     int   pullDir = 1;
     void  addDamage(float d);
     float offroad = 0, skid = 0;

@@ -322,7 +322,18 @@ void handle_events() {
         lastD = d;
     }
     if (e.pitStart) message("PIT STOP", rgb(255, 230, 120), rgb(200, 120, 10), 1.5f);
-    if (e.pitDone) { plat::playSfx(plat::SFX_LAP); message("ENGINE REPAIRED", rgb(160, 255, 200), rgb(20, 160, 90), 1.8f); }
+    if (e.pitDone) { plat::playSfx(plat::SFX_LAP); message(g_race.damage <= 0.01f ? "ENGINE REPAIRED" : "TYRES & TRACKING OK", rgb(160, 255, 200), rgb(20, 160, 90), 1.8f); }
+    {   // pit lane: speed limiter, bay names, lollipop
+        static bool wasApron = false; static int lastBay = 0, lastLol = 0;
+        if (g_race.onApron && !wasApron) message("PIT LANE - 85 KM/H", rgb(130, 210, 255), rgb(20, 90, 170), 1.4f);
+        if (g_race.activeBay != lastBay) {
+            if (g_race.activeBay == 1) message("N2O EXPRESS", rgb(120, 235, 255), rgb(20, 120, 160), 1.1f);
+            else if (g_race.activeBay == 2) message("TYRES - SLOW DOWN", rgb(255, 225, 110), rgb(170, 120, 10), 1.3f);
+            else if (g_race.activeBay == 3) message("ENGINE GARAGE - STOP", rgb(255, 130, 110), rgb(170, 30, 20), 1.3f);
+        }
+        if (g_race.lollipop == 3 && lastLol != 3) message("GO! GO! GO!", rgb(150, 255, 170), rgb(20, 150, 60), 1.5f);
+        wasApron = g_race.onApron; lastBay = g_race.activeBay; lastLol = g_race.lollipop;
+    }
     if (e.lap && g_race.damage > 0.25f && !g_race.player().retired) message("PIT LANE ON THE RIGHT", rgb(255, 230, 120), rgb(200, 120, 10), 2.0f);
     if (e.retired) {
         plat::playSfx(plat::SFX_HIT_HEAVY);
