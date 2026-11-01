@@ -1,0 +1,11 @@
+# Render Blueprint : serveur de course en ligne (gratuit, s'endort apres 15 min sans activite).
+# Render > New > Blueprint > choisir ce depot : le service est cree et redeploye a chaque push sur main.
+services:
+  - type: web
+    name: aka-turbo-race-server
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true

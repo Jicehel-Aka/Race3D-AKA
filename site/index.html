@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AKA Turbo 3D - Course en ligne</title>
+<style>
+  :root { --bg:#0e1020; --card:#171a30; --ink:#eef0ff; --dim:#8b90b8; --acc:#ffb020; --ok:#44e08a; --bad:#ff5a5a; --line:#2a2f55; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f2f3fa; --card:#fff; --ink:#15182e; --dim:#5b6089; --line:#d6d9ee; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,sans-serif; }
+  main { max-width:880px; margin:0 auto; padding:16px; display:grid; gap:14px; }
+  h1 { font-size:22px; margin:6px 0 0; } h2 { font-size:15px; margin:0 0 8px; color:var(--acc); text-transform:uppercase; letter-spacing:.06em; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  input, select, button { font:inherit; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+  input { min-width:0; flex:1 1 180px; }
+  button { background:var(--acc); color:#1a1200; border:0; font-weight:600; cursor:pointer; }
+  button.alt { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:default; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--bad); margin-right:6px; }
+  .dot.on { background:var(--ok); }
+  table { width:100%; border-collapse:collapse; } td, th { padding:5px 6px; text-align:left; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  th { color:var(--dim); font-weight:500; font-size:13px; }
+  .dim { color:var(--dim); } code { background:var(--bg); padding:1px 5px; border-radius:5px; word-break:break-all; }
+  .sw { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AKA Turbo 3D Grand Prix - course en ligne</h1>
+
+  <section class="card">
+    <h2>Serveur</h2>
+    <div class="row">
+      <input id="srv" placeholder="https://mon-serveur.onrender.com" autocomplete="off" spellcheck="false">
+      <button id="btnSrv">Connecter</button>
+    </div>
+    <p id="srvState" class="dim" style="margin:8px 0 0"><span class="dot"></span>pas de serveur</p>
+    <p class="dim" style="margin:8px 0 0">Le serveur gratuit s'endort apres un moment sans activite : le premier acces peut prendre une minute.</p>
+  </section>
+
+  <section class="card">
+    <h2>Salons en cours</h2>
+    <div id="rooms" class="dim">-</div>
+  </section>
+
+  <section class="card">
+    <h2>Salon (commande)</h2>
+    <div class="row">
+      <input id="code" placeholder="code du salon (ex. AKA1)" maxlength="8" style="flex:0 1 200px">
+      <input id="pname" placeholder="ton nom" maxlength="12" style="flex:0 1 160px">
+      <button id="btnJoin">Ouvrir le salon</button>
+      <button id="btnLeave" class="alt" disabled>Quitter</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <select id="track"></select>
+      <select id="laps"><option>1</option><option>2</option><option selected>3</option><option>5</option></select>
+      <select id="diff"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option><option value="3">Expert</option></select>
+      <label class="row" style="gap:4px"><input type="checkbox" id="ai" checked style="flex:0 0 auto;min-width:0"> pilotes IA</label>
+      <button id="btnStart" disabled>Lancer la course</button>
+    </div>
+    <p id="phase" class="dim" style="margin:8px 0">-</p>
+    <table id="grid"><thead><tr><th>#</th><th>Pilote</th><th>Plateforme</th><th>Tour</th><th>km/h</th><th>Ping</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>Connecter la console AKA</h2>
+    <p style="margin:0 0 6px">Dans le jeu : menu <b>Course en ligne</b>, puis saisir :</p>
+    <p style="margin:0">Serveur : <code id="hostOut">-</code><br>Salon : <code id="codeOut">-</code></p>
+    <p class="dim" style="margin:8px 0 0">La console rejoint le meme salon, recoit sa place automatiquement. Le depart se lance depuis cette page ou depuis la console hote.</p>
+  </section>
+</main>
+<script src="config.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const TRACKS = ['SUNSET COAST','ALPINE PASS','NEON CITY','PALM BAY','GLACIER RUN','NIGHT HARBOR'];
+const COLORS = ['#1E5ADC','#FAC814','#28AA50','#464652','#F0F0F4','#8C32C8','#FF7814','#DC1824'];
+const NAMES = ['VIPER','BLAZE','NOVA','RAVEN','ACE','ZED','KAI','YOU'];
+const store = { get(k){ try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
+let base = '', ws = null, myId = '', state = null, timer = 0;
+TRACKS.forEach((n,i) => $('track').add(new Option(n, i)));
+$('srv').value = window.AKA_SERVER_URL || store.get('aka.server');
+$('code').value = store.get('aka.code') || 'AKA1';
+$('pname').value = store.get('aka.name') || 'HOTE';
+myId = store.get('aka.cid') || ('w-' + Math.random().toString(36).slice(2,10)); store.set('aka.cid', myId);
+
+function norm(u){ u = u.trim().replace(/\/+$/,''); if (u && !/^https?:\/\//.test(u)) u = 'https://' + u; return u; }
+async function poll(){
+  if (!base) return;
+  try {
+    const h = await (await fetch(base + '/api/health', { cache:'no-store' })).json();
+    $('srvState').innerHTML = '<span class="dot on"></span>en ligne - ' + h.activeRooms + ' salon(s) actif(s), protocole ' + h.protocolVersion;
+    const r = await (await fetch(base + '/api/rooms', { cache:'no-store' })).json();
+    $('rooms').innerHTML = r.rooms.length ? '<table><tr><th>Code</th><th>Circuit</th><th>Tours</th><th>Etat</th><th>Joueurs</th></tr>' +
+      r.rooms.map(x => `<tr><td><b>${esc(x.code)}</b></td><td>${esc(x.trackName)}</td><td>${x.laps}</td><td>${esc(x.phase)}</td><td>${x.humanCount}${x.players.length ? ' (' + x.players.map(p => esc(p.name)).join(', ') + ')' : ''}</td></tr>`).join('') + '</table>'
+      : 'Aucun salon. Cree-en un ci-dessous.';
+  } catch { $('srvState').innerHTML = '<span class="dot"></span>injoignable (serveur endormi ? reessaie dans une minute)'; }
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function connect(){
+  base = norm($('srv').value); if (!base) return;
+  store.set('aka.server', base); $('hostOut').textContent = base.replace(/^https?:\/\//,'');
+  clearInterval(timer); poll(); timer = setInterval(poll, 4000);
+}
+$('btnSrv').onclick = connect;
+$('code').oninput = () => { $('codeOut').textContent = $('code').value.toUpperCase() || '-'; };
+function send(type, payload){ if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type, payload })); }
+$('btnJoin').onclick = () => {
+  if (!base) return connect();
+  if (ws) ws.close();
+  const code = $('code').value.trim().toUpperCase() || 'AKA1', name = $('pname').value.trim() || 'HOTE';
+  store.set('aka.code', code); store.set('aka.name', name); $('codeOut').textContent = code;
+  ws = new WebSocket(base.replace(/^http/, 'ws') + '/ws/race?clientId=' + encodeURIComponent(myId));
+  ws.onopen = () => { send('room:join', { roomCode: code, name, platform: 'WEB', spectator: true }); $('btnLeave').disabled = false; };
+  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } const p = m.type === 'room:joined' ? m.payload.room : m.payload; if (m.type === 'room:joined' || m.type === 'room:state' || m.type === 'race:snapshot') { state = p; render(); } };
+  ws.onclose = () => { $('btnLeave').disabled = true; $('btnStart').disabled = true; $('phase').textContent = 'deconnecte'; };
+};
+$('btnLeave').onclick = () => { if (ws) ws.close(); };
+$('btnStart').onclick = () => {
+  send('room:configure', { trackId: +$('track').value, laps: +$('laps').value, difficulty: +$('diff').value, fillAi: $('ai').checked });
+  setTimeout(() => send('race:start'), 150);
+};
+['track','laps','diff','ai'].forEach(id => $(id).onchange = () => send('room:configure', { trackId: +$('track').value, laps: +$('laps').value, difficulty: +$('diff').value, fillAi: $('ai').checked }));
+function render(){
+  if (!state) return;
+  const lobby = state.phase === 'LOBBY' || state.phase === 'RESULTS', host = state.hostClientId === myId;
+  $('btnStart').disabled = !(lobby && host);
+  ['track','laps','diff','ai'].forEach(id => $(id).disabled = !(lobby && host));
+  if (lobby) { $('track').value = state.trackId; $('laps').value = state.laps; $('diff').value = state.difficulty; $('ai').checked = state.fillAi; }
+  $('phase').textContent = ({LOBBY:'Salon : en attente des pilotes', COUNTDOWN:'Depart imminent...', RACING:'Course en cours - ' + state.raceTime.toFixed(1) + ' s', RESULTS:'Course terminee'})[state.phase] + (host ? '' : ' (tu n\'es pas l\'hote)');
+  const cars = state.cars.slice().sort((a,b) => a.place - b.place);
+  $('grid').tBodies[0].innerHTML = cars.filter(c => c.platform !== 'AI' || state.fillAi).map(c =>
+    `<tr><td>${c.place}</td><td><span class="sw" style="background:${COLORS[c.driverLook & 7]}"></span>${esc(c.name)} <span class="dim">${NAMES[c.driverLook & 7]}</span></td><td>${c.platform}</td><td>${Math.min(c.lapsDone + 1, state.laps)}/${state.laps}${c.finished ? ' fin ' + c.finishTime.toFixed(1) + ' s' : ''}${c.retired ? ' abandon' : ''}</td><td>${Math.round(c.speed / 50)}</td><td>${c.platform === 'AI' ? '-' : c.pingMs + ' ms'}</td></tr>`).join('');
+}
+$('codeOut').textContent = $('code').value.toUpperCase();
+if ($('srv').value) connect();
+</script>
+</body>
+</html>

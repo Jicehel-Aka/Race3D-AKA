@@ -1,0 +1,23 @@
+{
+  "name": "aka-turbo-race-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Multiplayer race server for AKA Turbo 3D Grand Prix (WebSocket, binary frames for the Gamebuino AKA)",
+  "scripts": {
+    "start": "tsx server.ts",
+    "check": "tsc --noEmit"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "tsx": "^4.21.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.6.0"
+  }
+}

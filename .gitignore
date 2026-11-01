@@ -19,3 +19,6 @@ __pycache__/
 
 # Firmware : produit par la release (idf.py build), pas versionne
 sdcard_files/race3d/firmware.bin
+
+# Serveur de course
+server/node_modules/
