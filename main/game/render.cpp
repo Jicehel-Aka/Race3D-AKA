@@ -564,8 +564,7 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
         if (!kUseTq) {}
         else if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) { stage = CAR_ART_MID + 1; flip = r.spinDir > 0; }
         else {
-            // thresholds are tighter where the picture changes most (stages 2-4: the flank appears)
-            static const float kStep[CAR_ART_MID + 1] = { 0.18f, 0.30f, 0.42f, 0.55f, 0.70f, 0.88f };
+            static const float kStep[CAR_ART_MID + 1] = { 0.09f, 0.22f, 0.35f, 0.49f, 0.63f, 0.78f };   // regular angular steps of the rigid rotation
             float a = fabsf(sv);
             stage = 0;
             while (stage <= CAR_ART_MID && a >= kStep[stage]) ++stage;
@@ -575,11 +574,11 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
         const float u = (float)stage / (CAR_ART_MID + 1);   // 0 rear .. 1 three-quarter
         int dhA = dw * CAR_ART_H / CAR_ART_W;
         // the tyres touch the ground line of the old sprites (the picture has a diffuser below the tyres)
-        int ya = y + dh * 52 / 58 - dhA * (93 + (int)(4 * u + 0.5f)) / 100;
+        int ya = y + dh * 52 / 58 - dhA * (96 + (int)(4 * u + 0.5f)) / 100;
         int pw = tq ? dw * CAR_ART3Q_W / CAR_ART_W : dw, px0 = tq ? x - (pw - dw) / 2 : x;
         // ground shadow: darkest right under the tyres
         {
-            int gy = ya + dhA * (93 + (int)(4 * u + 0.5f)) / 100;
+            int gy = ya + dhA * (96 + (int)(4 * u + 0.5f)) / 100;
             int cx = px0 + pw / 2, ry = dhA * 9 / 100 + 1, rx = pw * 46 / 100, cy = gy - ry / 2;
             for (int j = cy - ry; j <= cy + ry; ++j) {
                 if (j < 0 || j >= clip || j >= H) continue;
