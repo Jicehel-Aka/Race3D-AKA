@@ -627,18 +627,8 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
         // the tyres touch the ground line of the old sprites (the picture has a diffuser below the tyres)
         int ya = y + dh * 52 / 58 - dhA * 97 / 100;
         int pw = tq ? dw * CAR_ART3Q_W / CAR_ART_W : dw, px0 = tq ? x - (pw - dw) / 2 : x;
-        // ground shadow: darkest right under the tyres
-        {
-            int gy = ya + dhA * 97 / 100;
-            int cx = px0 + pw / 2, ry = dhA * 9 / 100 + 1, rx = pw * 46 / 100, cy = gy - ry / 2;
-            for (int j = cy - ry; j <= cy + ry; ++j) {
-                if (j < 0 || j >= clip || j >= H) continue;
-                float u = (float)(j - cy) / ry;
-                int half_ = (int)(rx * sqrtf(fmaxf(0.0f, 1.0f - u * u)));
-                int a0 = cx - half_ < 0 ? 0 : cx - half_, a1 = cx + half_ > W ? W : cx + half_;
-                for (int i = a0; i < a1; ++i) fb[j * W + i] = scale(fb[j * W + i], 110);
-            }
-        }
+        // ground shadow: follows the silhouette of the picture (lifted on the far side in turns)
+        car_shadow(c.look, stage, flip, x, ya, dw, dhA, clip);
         blit_car(c.look, stage, flip, x, ya, dw, dhA, clip, amb, th.fog, fog);
         // lamps: lit when braking (strong) or at night (dim), on the lamp boxes of the picture
         if ((c.braking || th.ambient < 256) && dw > 8 && fog < 200) {

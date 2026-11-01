@@ -1507,6 +1507,51 @@ void car_art_init() {
 }
 bool car_art_ready() { return s_carReady; }
 
+// Ground shadow that follows the real silhouette of the picture: in a turn the far side of the car is higher on the
+// screen, so the shadow is lifted and stretched with it instead of staying a flat ellipse under the rear tyres.
+void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, int clipY) {
+    if (!s_carReady || dw <= 0 || dh <= 0) return;
+    const int d = driver % CAR_ART_COUNT;
+    const CarMip* mips = stage <= 0 ? s_carMip[d] : stage > CAR_ART_MID ? s_carMip3[d] : s_carMipMid[d][stage - 1];
+    if (stage > 0) { int w3 = dw * CAR_ART3Q_W / CAR_ART_W; x -= (w3 - dw) / 2; dw = w3; }
+    const CarMip& mp = mips[2];                                   // smallest picture is enough for a silhouette
+    if (dw > 512) return;
+    static int bot[512];
+    const int stepX = (mp.w << 16) / dw;
+    const int tyre = dh * 3 / 100;                                // the picture has a diffuser a little below the tyres
+    int lo = dw, hi = -1;
+    for (int k = 0; k < dw; ++k) {
+        int sxf = k * stepX + (stepX >> 1);
+        if (flip) sxf = (mp.w << 16) - 1 - sxf;
+        int sx = sxf >> 16; if (sx < 0) sx = 0; if (sx > mp.w - 1) sx = mp.w - 1;
+        int r = mp.h - 1;
+        while (r >= 0 && mp.px[r * mp.w + sx] == CAR_ART_KEY) --r;
+        if (r < 0) { bot[k] = -100000; continue; }
+        bot[k] = y + (r + 1) * dh / mp.h - tyre;
+        if (k < lo) lo = k;
+        hi = k;
+    }
+    if (hi < lo) return;
+    const int R = dw * 10 / 100 + 1;                              // bridge the gaps between the wheels with the tyre level
+    static int fill[512];
+    for (int k = 0; k < dw; ++k) {
+        int m = -100000;
+        for (int q = k - R; q <= k + R; ++q) if (q >= lo && q <= hi && bot[q] > m) m = bot[q];
+        fill[k] = m;
+    }
+    const int ry = dh * 9 / 100 + 1;
+    const float half = (hi - lo + 1) * 0.5f, mid = (lo + hi) * 0.5f;
+    for (int k = lo; k <= hi; ++k) {
+        int i = x + k;
+        if (i < 0 || i >= gfx::W || fill[k] < -1000) continue;
+        float t = (k - mid) / half;
+        float f = sqrtf(fmaxf(0.0f, 1.0f - t * t * t * t));        // soft, rounded ends
+        int h = (int)(ry * 1.5f * f) + 1;
+        int j0 = fill[k] - h, j1 = fill[k] + ry / 2;
+        for (int j = j0 < 0 ? 0 : j0; j <= j1 && j < clipY && j < gfx::H; ++j) gfx::fb[j * gfx::W + i] = gfx::scale(gfx::fb[j * gfx::W + i], 110);
+    }
+}
+
 void blit_car(int driver, int stage, bool flip, int x, int y, int dw, int dh, int clipY, int ambient, uint16_t fogc, int fog) {
     if (!s_carReady || dw <= 0 || dh <= 0) return;
     // stage 0 = rear view, 1..CAR_ART_MID = intermediate pictures, CAR_ART_MID+1 = three-quarter view

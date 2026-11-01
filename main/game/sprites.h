@@ -50,6 +50,7 @@ void car_art_init();
 bool car_art_ready();
 // dir -1/0/+1: lean of the upper body (sheared turn frame), amp: shear in 112-px sprite units
 // tq: use the three-quarter picture (nose to the left; flip mirrors it). dw is the width of the REAR view; the 3/4 picture is drawn wider.
+void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, int clipY);
 void blit_car(int driver, int stage, bool flip, int x, int y, int dw, int dh, int clipY, int ambient, uint16_t fogc, int fog);
 
 void blit(const Sprite& s, const uint16_t* pal, int x, int y, int dw, int dh, int clipY, bool flip);
