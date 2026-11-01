@@ -1510,7 +1510,7 @@ bool car_art_ready() { return s_carReady; }
 // Ground shadow. The sun is high and in front of the car, so the shadow is the car's footprint (a rectangle seen on
 // the road in perspective, turned by the same angle as the picture) thrown straight back, towards the camera: what
 // shows is a flat dark patch under and behind the rear of the car, never the silhouette of the wheels.
-void car_shadow(int /*driver*/, int stage, bool flip, int x, int y, int dw, int dh, int clipY) {
+void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, int clipY) {
     if (dw <= 0 || dh <= 0) return;
     int pw = dw, px0 = x;
     if (stage > 0) { pw = dw * CAR_ART3Q_W / CAR_ART_W; px0 = x - (pw - dw) / 2; }
@@ -1528,12 +1528,28 @@ void car_shadow(int /*driver*/, int stage, bool flip, int x, int y, int dw, int 
         if (sx[i] > maxx) maxx = sx[i];
         if (sy[i] > maxy) maxy = sy[i];
     }
-    const float gy = y + dh * 97.0f / 100 + dh * 0.13f;                  // nearest corner on the tyre line, thrown back a little
-    const float cx = px0 + pw * 0.5f - (minx + maxx) * 0.5f * (flip ? -1.0f : 1.0f) * 0.0f;
+    const float gy = y + dh * 97.0f / 100 + dh * 0.13f;                  // nearest corner on the tyre line, thrown back
     for (int i = 0; i < 4; ++i) { if (flip) sx[i] = -sx[i]; sy[i] += gy - maxy; }
     float mn = sx[0], mx = sx[0];
     for (int i = 1; i < 4; ++i) { if (sx[i] < mn) mn = sx[i]; if (sx[i] > mx) mx = sx[i]; }
-    const float off = cx - (mn + mx) * 0.5f;
+    // fit the footprint to the real car: horizontal extent of the body (tyre rows of the picture, wing excluded)
+    float bodyL = px0 + pw * 0.5f - (mx - mn) * 0.5f, bodyR = bodyL + (mx - mn);
+    if (s_carReady) {
+        const int dd = driver % CAR_ART_COUNT;
+        const CarMip* mips = stage <= 0 ? s_carMip[dd] : stage > CAR_ART_MID ? s_carMip3[dd] : s_carMipMid[dd][stage - 1];
+        const CarMip& mp = mips[2];
+        int xl = mp.w, xr = -1;
+        for (int r = mp.h * 62 / 100; r < mp.h * 92 / 100; ++r)
+            for (int c2 = 0; c2 < mp.w; ++c2)
+                if (mp.px[r * mp.w + c2] != CAR_ART_KEY) { if (c2 < xl) xl = c2; if (c2 > xr) xr = c2; }
+        if (xr > xl) {
+            if (flip) { int t = mp.w - 1 - xr; xr = mp.w - 1 - xl; xl = t; }
+            bodyL = px0 + (float)xl * pw / mp.w; bodyR = px0 + (float)(xr + 1) * pw / mp.w;
+        }
+    }
+    const float fit = (bodyR - bodyL) / fmaxf(1.0f, mx - mn);
+    for (int i = 0; i < 4; ++i) { sx[i] = (sx[i] - mn) * fit + bodyL; sy[i] = gy + (sy[i] - gy) * fit; }
+    const float off = 0.0f;
     float miny = sy[0];
     for (int i = 1; i < 4; ++i) if (sy[i] < miny) miny = sy[i];
     const int j0 = (int)miny, j1 = (int)gy + 1;
