@@ -3,6 +3,7 @@
 #include "car_art.h"
 #include "gfx.h"
 #include "platform.h"
+#include "car_shadow_art.h"
 #include "font8x8.h"
 #include <math.h>
 #include <string.h>
@@ -1507,73 +1508,27 @@ void car_art_init() {
 }
 bool car_art_ready() { return s_carReady; }
 
-// Ground shadow. The sun is high and in front of the car, so the shadow is the car's footprint (a rectangle seen on
-// the road in perspective, turned by the same angle as the picture) thrown straight back, towards the camera: what
-// shows is a flat dark patch under and behind the rear of the car, never the silhouette of the wheels.
+// Ground shadow: hand-painted 1-bit shadow of each picture (car_shadow_art.cpp), scaled like the car and mirrored with it.
 void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, int clipY) {
-    if (dw <= 0 || dh <= 0) return;
-    int pw = dw, px0 = x;
-    if (stage > 0) { pw = dw * CAR_ART3Q_W / CAR_ART_W; px0 = x - (pw - dw) / 2; }
-    const float th = (float)stage / (CAR_ART_MID + 1) * 0.62f;           // yaw of the car, same as the picture (about 35 deg at most)
-    const float sn = sinf(th), cs = cosf(th);
-    const float bw = dw * 0.80f, len = bw * 1.9f, k = 0.20f;            // footprint (px) and ground foreshortening
-    // footprint corners, car-relative: u across, v along (v = 0 at the rear)
-    const float cu[4] = { -0.5f * bw, 0.5f * bw, 0.5f * bw, -0.5f * bw };
-    const float cv[4] = { 0, 0, len, len };
-    float sx[4], sy[4], minx = 1e9f, maxx = -1e9f, maxy = -1e9f;
-    for (int i = 0; i < 4; ++i) {
-        sx[i] = cu[i] * cs - cv[i] * sn;                                 // the nose goes to the left in the unflipped pictures
-        sy[i] = -(cu[i] * sn + cv[i] * cs) * k;                          // further away = higher on the screen
-        if (sx[i] < minx) minx = sx[i];
-        if (sx[i] > maxx) maxx = sx[i];
-        if (sy[i] > maxy) maxy = sy[i];
-    }
-    const float gy = y + dh * 97.0f / 100 + dh * 0.13f;                  // nearest corner on the tyre line, thrown back
-    for (int i = 0; i < 4; ++i) { if (flip) sx[i] = -sx[i]; sy[i] += gy - maxy; }
-    float mn = sx[0], mx = sx[0];
-    for (int i = 1; i < 4; ++i) { if (sx[i] < mn) mn = sx[i]; if (sx[i] > mx) mx = sx[i]; }
-    // fit the footprint to the real car: horizontal extent of the body (tyre rows of the picture, wing excluded)
-    float bodyL = px0 + pw * 0.5f - (mx - mn) * 0.5f, bodyR = bodyL + (mx - mn);
-    if (s_carReady) {
-        const int dd = driver % CAR_ART_COUNT;
-        const CarMip* mips = stage <= 0 ? s_carMip[dd] : stage > CAR_ART_MID ? s_carMip3[dd] : s_carMipMid[dd][stage - 1];
-        const CarMip& mp = mips[2];
-        int xl = mp.w, xr = -1;
-        for (int r = mp.h * 62 / 100; r < mp.h * 92 / 100; ++r)
-            for (int c2 = 0; c2 < mp.w; ++c2)
-                if (mp.px[r * mp.w + c2] != CAR_ART_KEY) { if (c2 < xl) xl = c2; if (c2 > xr) xr = c2; }
-        if (xr > xl) {
-            if (flip) { int t = mp.w - 1 - xr; xr = mp.w - 1 - xl; xl = t; }
-            bodyL = px0 + (float)xl * pw / mp.w; bodyR = px0 + (float)(xr + 1) * pw / mp.w;
-        }
-    }
-    const float fit = (bodyR - bodyL) / fmaxf(1.0f, mx - mn);
-    for (int i = 0; i < 4; ++i) { sx[i] = (sx[i] - mn) * fit + bodyL; sy[i] = gy + (sy[i] - gy) * fit; }
-    const float off = 0.0f;
-    float miny = sy[0];
-    for (int i = 1; i < 4; ++i) if (sy[i] < miny) miny = sy[i];
-    const int j0 = (int)miny, j1 = (int)gy + 1;
-    for (int j = j0 < 0 ? 0 : j0; j <= j1 && j < clipY && j < gfx::H; ++j) {
-        float lo = 1e9f, hi = -1e9f;
-        for (int i = 0; i < 4; ++i) {                                    // scanline against the 4 edges
-            int n = (i + 1) & 3;
-            float ya = sy[i], yb = sy[n];
-            if ((j + 0.5f < ya) == (j + 0.5f < yb)) continue;
-            float t = (j + 0.5f - ya) / (yb - ya);
-            float xx = sx[i] + (sx[n] - sx[i]) * t + off;
-            if (xx < lo) lo = xx;
-            if (xx > hi) hi = xx;
-        }
-        if (hi < lo) continue;
-        // rounded rear corners: pull the ends in on the last rows
-        float edge = fminf(gy - j, 6.0f);
-        float inset = edge < 3.0f ? (3.0f - edge) * 1.2f : 0.0f;
-        int a0 = (int)(lo + inset), a1 = (int)(hi - inset);
-        if (a0 < 0) a0 = 0;
-        if (a1 > gfx::W) a1 = gfx::W;
-        for (int i = a0; i < a1; ++i) {
-            bool soft = i == a0 || i == a1 - 1 || j == (int)gy;
-            gfx::fb[j * gfx::W + i] = gfx::scale(gfx::fb[j * gfx::W + i], soft ? 175 : 120);
+    if (dw <= 0 || dh <= 0 || stage < 0 || stage >= CAR_SHADOW_STAGES) return;
+    const CarShadow& e = kCarShadow[driver % CAR_ART_COUNT][stage];
+    if (!e.w || !e.h) return;
+    const int picW = stage > 0 ? CAR_ART3Q_W : CAR_ART_W;
+    int pl = x;
+    if (stage > 0) pl = x - (dw * CAR_ART3Q_W / CAR_ART_W - dw) / 2;       // left edge of the (wide) picture
+    const int ex = flip ? picW - (e.x + e.w) : e.x;                        // mirrored position of the mask
+    const int dx0 = pl + ex * dw / CAR_ART_W, dx1 = pl + (ex + e.w) * dw / CAR_ART_W;
+    const int dy0 = y + e.y * dh / CAR_ART_H, dy1 = y + (e.y + e.h) * dh / CAR_ART_H;
+    const int rb = (e.w + 7) / 8;
+    const uint8_t* bits = kCarShadowBits + e.off;
+    for (int j = dy0; j < dy1; ++j) {
+        if (j < 0 || j >= clipY || j >= gfx::H) continue;
+        int my = (j - dy0) * e.h / (dy1 - dy0);
+        const uint8_t* row = bits + my * rb;
+        for (int i = dx0 < 0 ? 0 : dx0; i < dx1 && i < gfx::W; ++i) {
+            int mx = (i - dx0) * e.w / (dx1 - dx0);
+            if (flip) mx = e.w - 1 - mx;
+            if (row[mx >> 3] & (0x80 >> (mx & 7))) gfx::fb[j * gfx::W + i] = gfx::scale(gfx::fb[j * gfx::W + i], 105);
         }
     }
 }

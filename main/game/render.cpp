@@ -773,7 +773,7 @@ void render_world(const Race& r, float time) {
             float pct = pl.speed / MAX_SPEED;
             if (r.offroad > 0) bounce = (float)((int)(time * 40) & 1) * 2.0f * r.offroad * (pct > 0.05f ? 1 : 0);
             else bounce = ((int)(time * 12) & 1) * (pct > 0.3f ? 1.0f : 0.0f);
-            int px = W / 2 - 56 + (int)(shakeX * 0.01f), py = H - 58 - 3 - (int)bounce;
+            int px = W / 2 - 56 + (int)(shakeX * 0.01f), py = H - 58 - 11 - (int)bounce;
             // night headlights on the tarmac
             if (th.ambient < 256) {
                 for (int y = H / 2 + 22; y < py + 20; ++y) {
