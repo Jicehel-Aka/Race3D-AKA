@@ -160,6 +160,7 @@ extern "C" void app_main(void) {
     uint32_t fpsT = last, frames = 0;
     while (true) {
         input_poll(g_keys);
+        const bool menuWasOpen = akaRuntime.isMenuOpen();
         if (!akaRuntime.update(g_keys)) {          // system menu is open and draws itself
             s_synth.setEngine(0, 0, 0);
             s_synth.setNoise(0, 0);
@@ -168,6 +169,7 @@ extern "C" void app_main(void) {
             continue;
         }
         plat::Input in = read_input(g_keys);
+        if (menuWasOpen) in = plat::Input();       // the button that closed the menu (A on "Back to menu"...) must not reach the game
 
         while (!lcd_refresh_completed()) {}       // previous DMA transfer done: safe to draw
         uint32_t now = plat::millis();
