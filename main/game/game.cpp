@@ -145,6 +145,7 @@ void start_race() {
     g_onlineRace = false;
     g_race.playerIdx = CAR_COUNT - 1;
     g_race.setup(g_track, g_diff, kLaps[g_lapsSel], false);
+    g_race.cars[g_race.playerIdx].name = player_name();
     plat::playMusic(g_trackDefs[g_track].music, true);
     fx_clear();
     g_state = ST_COUNTDOWN; g_stateT = 0;
@@ -211,7 +212,12 @@ void close_name_editor(bool save) {
     plat::playSfx(plat::SFX_MENU_OK);
 }
 
-void update_name_editor(const plat::Input& in) {
+void update_name_editor(const plat::Input& inRaw, float dt) {
+    plat::Input in = inRaw;
+    static float hold = 0;                                   // key repeat: faster travel over the grid
+    uint32_t dir = in.held & (plat::BTN_LEFT | plat::BTN_RIGHT | plat::BTN_UP | plat::BTN_DOWN);
+    if (dir && !(in.pressed & dir)) { hold += dt; if (hold > 0.4f) { hold -= 0.09f; in.pressed |= dir; } }
+    else hold = 0;
     if (in.pressed & plat::BTN_LEFT) g_kx = (g_kx + 9) % 10;
     if (in.pressed & plat::BTN_RIGHT) g_kx = (g_kx + 1) % 10;
     if (in.pressed & plat::BTN_UP) g_ky = (g_ky + 3) % 4;
@@ -224,7 +230,8 @@ void update_name_editor(const plat::Input& in) {
         else if (g_editLen < NAME_MAX) { g_edit[g_editLen++] = kKeys[g_ky][g_kx]; g_edit[g_editLen] = 0; }
         plat::playSfx(plat::SFX_MENU_MOVE);
     }
-    if ((in.pressed & plat::BTN_B) && g_editLen > 0) { g_edit[--g_editLen] = 0; plat::playSfx(plat::SFX_MENU_MOVE); }
+    if ((in.pressed & plat::BTN_R1) && g_editLen < NAME_MAX && g_editLen > 0) { g_edit[g_editLen++] = ' '; g_edit[g_editLen] = 0; }   // R1: space
+    if (((in.pressed & plat::BTN_B) || (in.pressed & plat::BTN_L1)) && g_editLen > 0) { g_edit[--g_editLen] = 0; plat::playSfx(plat::SFX_MENU_MOVE); }
     if (in.pressed & plat::BTN_RUN) close_name_editor(true);
 }
 
@@ -537,6 +544,7 @@ void draw_online() {
         else hint = TR("WAITING FOR THE HOST...");
     }
     text(W / 2 - textWidth(hint) / 2, 216, hint, rgb(200, 200, 230));
+    if (plat::freeInternalKb()) { char rb[16]; snprintf(rb, sizeof rb, "RAM %uK", plat::freeInternalKb()); text(W - 20 - textWidth(rb), 232, rb, rgb(90, 90, 130)); }
 }
 
 void audio_update() {
@@ -727,7 +735,7 @@ void game_frame(const plat::Input& in, float dt) {
         break;
     }
     case ST_NAME: {
-        update_name_editor(in);
+        update_name_editor(in, dt);
         for (float t = dt; t > 0; t -= 1.0f / 60) g_race.update(fminf(t, 1.0f / 60), none);
         draw_name_editor();
         break;

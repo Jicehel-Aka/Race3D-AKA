@@ -47,7 +47,7 @@ jobs:
         run: |
           . $IDF_PATH/export.sh
           idf.py size | tail -25
-          idf.py size-files 2>/dev/null | head -45
+          idf.py size-files 2>/dev/null | sed -n 1,45p
           xtensa-esp32s3-elf-nm -S --size-sort -C build/race3d_aka.elf | grep -i " [bBdD] " | tail -30
 
   race-server:

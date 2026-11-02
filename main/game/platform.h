@@ -41,6 +41,9 @@ void setMusicVolume(float v);                     // 0..1
 const char* languageCode();
 void        setLanguageCode(const char* code);
 
+// Free internal RAM in KB (console only, 0 on PC): shown on the online screen to diagnose Wi-Fi failures.
+unsigned    freeInternalKb();
+
 // Network (online races). Implemented by the platform in a background task: Wi-Fi, TCP/TLS and the WebSocket
 // connection. Everything here is non blocking for the game thread.
 enum NetStatus : int { NET_OFF = 0, NET_WIFI, NET_CONNECTING, NET_ONLINE, NET_FAILED };

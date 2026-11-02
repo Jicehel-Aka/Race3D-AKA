@@ -1,3 +1,4 @@
+#include "esp_heap_caps.h"
 #include "aka_runtime/aka_runtime.h"
 #include "core/input.h"
 #include "gb_core.h"
@@ -36,11 +37,23 @@ static bool s_helpRequested = false;
 #define LANG_MAX_ENTRIES 96
 #define LANG_KEY_LEN     24
 #define LANG_VAL_LEN     96
-static char s_langKeys[LANG_MAX_ENTRIES][LANG_KEY_LEN];
-static char s_langVals[LANG_MAX_ENTRIES][LANG_VAL_LEN];
+// Tables en PSRAM (11 Ko de RAM interne en moins), allouees a la premiere lecture.
+typedef char LangKey[LANG_KEY_LEN];
+typedef char LangVal[LANG_VAL_LEN];
+static LangKey* s_langKeys = nullptr;
+static LangVal* s_langVals = nullptr;
 static int  s_langCount = 0;
+static bool lang_alloc() {
+    if (s_langKeys && s_langVals) return true;
+    if (!s_langKeys) s_langKeys = (LangKey*)heap_caps_calloc(LANG_MAX_ENTRIES, sizeof(LangKey), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_langVals) s_langVals = (LangVal*)heap_caps_calloc(LANG_MAX_ENTRIES, sizeof(LangVal), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_langKeys) s_langKeys = (LangKey*)calloc(LANG_MAX_ENTRIES, sizeof(LangKey));
+    if (!s_langVals) s_langVals = (LangVal*)calloc(LANG_MAX_ENTRIES, sizeof(LangVal));
+    return s_langKeys && s_langVals;
+}
 
 static void load_language_file_append(const char* path) {
+    if (!lang_alloc()) return;
     FILE* f = fopen(path, "rb");
     if (!f) { ESP_LOGE(TAG, "load_language_file(%s) -> ECHEC (fichier absent)", path); return; }
 
@@ -507,6 +520,7 @@ void AkaRuntime::setLanguage(const char* code) {
 }
 
 const char* AkaRuntime::translate(const char* key) const {
+    if (s_langKeys && s_langVals)
     for (int i = s_langCount - 1; i >= 0; --i)   // ordre inverse : specifique au jeu prioritaire
         if (strcmp(s_langKeys[i], key) == 0) return s_langVals[i];
     return key;

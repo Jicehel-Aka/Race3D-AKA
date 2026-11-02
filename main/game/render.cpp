@@ -824,14 +824,15 @@ namespace {
 // kind: 0 fading square, 1 spark streak, 2 solid chip, 3 growing soft puff
 struct Particle { float x, y, vx, vy, life, max; uint16_t c; uint8_t size, kind; float g, grow; };
 constexpr int MAXP = 260;
-Particle s_p[MAXP];
+Particle* s_p = nullptr;          // PSRAM (10 KB less internal RAM)
 int s_pn = 0;
 uint32_t s_seed = 99;
 float s_flash = 0; uint16_t s_flashCol = 0;
 float prand() { s_seed ^= s_seed << 13; s_seed ^= s_seed >> 17; s_seed ^= s_seed << 5; return (s_seed & 0xFFFF) / 65536.0f; }
 
 void spawn(float x, float y, float vx, float vy, float life, uint16_t c, int size, int kind = 0, float g = 40.0f, float grow = 3.0f) {
-    if (s_pn >= MAXP) return;
+    if (!s_p) s_p = (Particle*)plat::allocLarge(sizeof(Particle) * MAXP);
+    if (!s_p || s_pn >= MAXP) return;
     s_p[s_pn++] = { x, y, vx, vy, life, life, c, (uint8_t)size, (uint8_t)kind, g, grow };
 }
 } // namespace
@@ -1083,7 +1084,7 @@ void render_tower(const Race& r, int x, int y) {
         text(x + 2, yy, buf, c.isPlayer ? rgb(255, 230, 80) : rgb(200, 200, 210));
         fillRect(x + 12, yy + 1, 6, 6, c.livery.body);
         rect(x + 12, yy + 1, 6, 6, c.livery.stripe);
-        text(x + 21, yy, c.name, c.isPlayer ? rgb(255, 230, 80) : rgb(240, 240, 240));
+        { char nm[9]; snprintf(nm, sizeof nm, "%s", c.name); text(x + 21, yy, nm, c.isPlayer ? rgb(255, 230, 80) : rgb(240, 240, 240)); }
     }
 }
 

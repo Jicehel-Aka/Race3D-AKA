@@ -140,7 +140,7 @@ void poll() {
             for (int i = 0; i < CAR_COUNT; ++i) {
                 const uint8_t* q = buf + 1 + i * 10;
                 int k = 0;
-                for (; k < 10 && q[k]; ++k) g_names[i][k] = (char)q[k];
+                for (; k < 10 && q[k]; ++k) g_names[i][k] = q[k] == '_' ? ' ' : (char)q[k];   // the URL form of a space
                 g_names[i][k] = 0;
             }
             continue;

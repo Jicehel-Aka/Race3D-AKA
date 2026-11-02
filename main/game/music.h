@@ -19,6 +19,6 @@ struct Sequence {
 enum : uint8_t { DRUM_KICK = 1, DRUM_SNARE = 2, DRUM_HAT = 4 };
 
 constexpr int SONG_COUNT = 6;
-extern Sequence g_songs[SONG_COUNT];
+extern Sequence* g_songs;
 
 void music_init();   // parses the song texts (call once at boot)

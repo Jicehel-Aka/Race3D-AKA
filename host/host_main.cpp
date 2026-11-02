@@ -41,6 +41,7 @@ bool loadBlob(void* d, size_t n) {
     size_t r = fread(d, 1, n, f); fclose(f); return r == n;
 }
 static char s_lang[4] = "en";
+unsigned freeInternalKb() { return 0; }
 const char* languageCode() { return s_lang; }
 void setLanguageCode(const char* code) {
     if (!code || !code[0]) return;

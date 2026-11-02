@@ -74,6 +74,7 @@ void playSfx(int id) {
 }
 void playMusic(int song, bool restart) { s_synth.setSong(song, restart); }
 void setMusicVolume(float v) { s_synth.setMusicVolume(v); }
+unsigned freeInternalKb() { return (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024); }
 const char* languageCode() { return akaRuntime.getLanguage(); }
 void setLanguageCode(const char* code) { akaRuntime.setLanguage(code); }
 

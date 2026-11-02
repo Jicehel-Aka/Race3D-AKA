@@ -3,10 +3,12 @@
 // Chords: one per bar; the bass and the arpeggio are generated from them.
 // Drums: k kick, s snare, h hat, x kick+hat, o snare+hat, . nothing.
 #include "music.h"
+#include "platform.h"
+#include <new>
 #include <string.h>
 #include <stdio.h>
 
-Sequence g_songs[SONG_COUNT];
+Sequence* g_songs = nullptr;      // allocated in PSRAM by music_init (9 KB less internal RAM)
 
 namespace {
 
@@ -208,6 +210,10 @@ void compile(const SongText& src, Sequence& seq) {
 } // namespace
 
 void music_init() {
+    if (!g_songs) {
+        g_songs = (Sequence*)plat::allocLarge(sizeof(Sequence) * SONG_COUNT);
+        for (int k = 0; k < SONG_COUNT; ++k) new (&g_songs[k]) Sequence();
+    }
     static bool done = false;
     if (done) return;
     done = true;
