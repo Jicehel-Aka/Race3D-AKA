@@ -8,6 +8,9 @@ complete avec des pilotes IA, calcule les classements et rediffuse l'etat a 20 H
 - `/api/health`, `/api/rooms` : etat du serveur et salons en cours (lus par la page de controle).
 - A l'arrivee d'un client binaire, le serveur envoie une trame d'accueil de 6 octets
   `0xA6, place, tours, difficulte, circuit, drapeaux` (bit0 = hote), puis les snapshots `0xA5` (164 octets, octet 1 : phase bits 0-1, circuit bits 2-5, index du nombre de tours [1,2,3,5] bits 6-7).
+- Noms des joueurs : trame `0xA7` (8 x 10 octets ASCII, un nom par voiture), envoyee a chaque changement du salon puis toutes les 2 s environ. Le nom vient de `&name=` (choisi dans le jeu).
+- Les commandes `room:configure`, `race:start`, `race:lobby` ne sont acceptees que de l'hote (le premier joueur ; l'hote passe au suivant s'il part). Un joueur qui quitte en course est remplace par un pilote IA.
+- Anti-triche : chaque trame recue est validee (vitesse max, acceleration, distance parcourue par seconde, position laterale). Une valeur impossible est ramenee a la limite et comptee ; au-dela de 14 infractions le joueur est disqualifie (message JSON `{"type":"kick","reason":"cheat"}` puis fermeture 4001).
 - Un client JSON peut rejoindre en `spectator: true` : il commande le salon (circuit, tours, depart) sans prendre de voiture.
 
 ## Lancer en local

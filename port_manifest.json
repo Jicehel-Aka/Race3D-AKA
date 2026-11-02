@@ -7,7 +7,7 @@
   "port_level": "native",
   "author": "jeancharleslebeau",
   "license": "MIT",
-  "description": "Pseudo-3D arcade racer with 6 tracks (each with its own look and music), 7 AI drivers and 4 difficulty levels.",
+  "description": "Pseudo-3D arcade racer: 6 tracks (each with its own look and music), AI drivers, 4 difficulty levels, online races for up to 8 players, 5 languages.",
   "supports_save": true,
   "supports_screenshot": true,
   "supports_languages": true,

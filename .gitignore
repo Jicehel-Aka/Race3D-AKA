@@ -22,3 +22,9 @@ sdcard_files/race3d/firmware.bin
 
 # Serveur de course
 server/node_modules/
+
+# PC version: files created next to the exe
+host/race3d_lang.txt
+host/screenshots/
+screenshots/
+race3d_lang.txt

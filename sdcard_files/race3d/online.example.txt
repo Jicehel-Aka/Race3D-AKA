@@ -8,6 +8,9 @@ pass=MotDePasseWifi
 # Friends who type the same room name race together (letters / digits, 10 max).
 # Les amis qui ecrivent le meme nom de salle courent ensemble.
 room=AKA1
+
+# The player name is chosen in the game (title menu, PILOTE / PLAYER row). This line is only the default.
+# Le nom du pilote se choisit dans le jeu (menu titre). Cette ligne n'est que la valeur par defaut.
 name=PILOTE
 
 # The public race server is already built in. Only change this if you host your own:
