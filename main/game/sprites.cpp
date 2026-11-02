@@ -1508,7 +1508,7 @@ void car_art_init() {
 }
 bool car_art_ready() { return s_carReady; }
 
-// Ground shadow: hand-painted 1-bit shadow of each picture (car_shadow_art.cpp), scaled like the car and mirrored with it.
+// Ground shadow: hand-painted 1-bit shadow of each picture (car_shadow_art.cpp), scaled like the car.
 void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, int clipY) {
     if (dw <= 0 || dh <= 0 || stage < 0 || stage >= CAR_SHADOW_STAGES) return;
     const CarShadow& e = kCarShadow[driver % CAR_ART_COUNT][stage];
@@ -1516,7 +1516,8 @@ void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, 
     const int picW = stage > 0 ? CAR_ART3Q_W : CAR_ART_W;
     int pl = x;
     if (stage > 0) pl = x - (dw * CAR_ART3Q_W / CAR_ART_W - dw) / 2;       // left edge of the (wide) picture
-    const int ex = flip ? picW - (e.x + e.w) : e.x;                        // mirrored position of the mask
+    // the light never changes: the shadow keeps falling to the lower left, so it is moved with the car, not mirrored
+    const int ex = flip ? e.x + (picW - 2 * e.bodyC) : e.x;
     const int dx0 = pl + ex * dw / CAR_ART_W, dx1 = pl + (ex + e.w) * dw / CAR_ART_W;
     const int dy0 = y + e.y * dh / CAR_ART_H, dy1 = y + (e.y + e.h) * dh / CAR_ART_H;
     const int rb = (e.w + 7) / 8;
@@ -1527,7 +1528,6 @@ void car_shadow(int driver, int stage, bool flip, int x, int y, int dw, int dh, 
         const uint8_t* row = bits + my * rb;
         for (int i = dx0 < 0 ? 0 : dx0; i < dx1 && i < gfx::W; ++i) {
             int mx = (i - dx0) * e.w / (dx1 - dx0);
-            if (flip) mx = e.w - 1 - mx;
             if (row[mx >> 3] & (0x80 >> (mx & 7))) gfx::fb[j * gfx::W + i] = gfx::scale(gfx::fb[j * gfx::W + i], 105);
         }
     }
