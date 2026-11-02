@@ -29,6 +29,9 @@ interface ServerCarState extends NetCarSnapshot {
   targetX: number;
   lapStart: number;
   lastUpdateMs: number;
+  repDist: number;         // last distance reported by the client (car.dist can be extrapolated ahead of it)
+  violations: number;      // anti-cheat: implausible reports so far
+  dq: boolean;             // disqualified for cheating
 }
 
 interface ClientConn {
@@ -38,6 +41,8 @@ interface ClientConn {
   slot: number;
   binaryMode: boolean;
   pingMs: number;
+  rateStart: number;       // anti-flood window
+  rateCount: number;
 }
 
 interface RaceRoom {
@@ -71,7 +76,7 @@ function sanitizeName(raw: string | undefined, fallback: string): string {
     .toUpperCase()
     .replace(/[^A-Z0-9 _-]/g, '')
     .trim()
-    .slice(0, 8);
+    .slice(0, 10);
   return cleaned || fallback;
 }
 
@@ -111,6 +116,9 @@ function createInitialCars(fillAi: boolean): ServerCarState[] {
       targetX: x,
       lapStart: 0,
       lastUpdateMs: Date.now(),
+      repDist: dist,
+      violations: 0,
+      dq: false,
     });
     if (!fillAi) {
       cars[i].retired = true;
@@ -161,6 +169,8 @@ function resetGridPositions(room: RaceRoom) {
     c.dist = -SEG_LEN * (3 + row * 6) - (col ? SEG_LEN * 2 : 0);
     c.x = col ? 0.45 : -0.45;
     c.targetX = c.x;
+    c.repDist = c.dist;
+    c.violations = 0;
     c.speed = 0;
     c.steerVis = 0;
     c.braking = false;
@@ -347,10 +357,90 @@ function broadcastRoom(room: RaceRoom, eventType = 'room:state') {
     if (conn.binaryMode) {
       if (!binBuf) binBuf = buildBinarySnapshot(room);
       conn.ws.send(binBuf, { binary: true });
+      if (eventType === 'room:state') conn.ws.send(buildNamesPacket(room), { binary: true });
     } else {
       conn.ws.send(jsonMsg);
     }
   }
+}
+
+// ---------------------------------------------------------------- anti-cheat
+// The clients stay authoritative for their own physics (pseudo-3D arcade game), but everything they report is checked
+// against what the game can really do: speed, acceleration, distance covered per second, lateral position. Anything
+// beyond the limits is clamped (the car cannot gain an advantage) and counted; too many violations = disqualification.
+const CHEAT_LIMIT = 14;
+const MAX_REPORT_SPEED = MAX_SPEED * 1.32;              // nitro boost is 1.28 x
+const MAX_ACCEL = MAX_SPEED * 0.9;                       // the game accelerates at 0.2..0.38 x per second
+const MAX_PACKETS_PER_SEC = 60;
+
+function flagViolation(room: RaceRoom, conn: ClientConn, car: ServerCarState, why: string) {
+  car.violations++;
+  if (car.violations >= CHEAT_LIMIT && !car.dq) {
+    car.dq = true;
+    car.retired = true;
+    console.log(`[anti-cheat] ${room.code} slot ${car.slot} ${car.name} disqualified (${why})`);
+    try {
+      conn.ws.send(JSON.stringify({ type: 'kick', reason: 'cheat' }));
+      conn.ws.close(4001, 'cheat');
+    } catch {
+      // already closed
+    }
+  }
+}
+
+interface Report { dist: number; x: number; speed: number; steerVis: number; damage: number; braking: boolean; nitroOn: boolean; pitting: boolean; retired: boolean }
+
+function applyReport(room: RaceRoom, conn: ClientConn, car: ServerCarState, r: Report) {
+  if (car.dq) return;
+  const now = Date.now();
+  const dt = Math.max(0.02, Math.min(1.0, (now - car.lastUpdateMs) / 1000));
+  if (!Number.isFinite(r.dist) || !Number.isFinite(r.speed) || !Number.isFinite(r.x)) {
+    flagViolation(room, conn, car, 'not finite');
+    return;
+  }
+  let speed = Math.max(0, Math.min(MAX_REPORT_SPEED, r.speed));
+  if (r.speed > MAX_REPORT_SPEED * 1.02) flagViolation(room, conn, car, 'speed');
+  if (room.phase === 'RACING') {
+    // acceleration: cannot jump up in speed (braking / crashes can drop it as fast as they like)
+    if (speed > car.speed + MAX_ACCEL * dt + MAX_SPEED * 0.02) {
+      speed = car.speed + MAX_ACCEL * dt;
+      flagViolation(room, conn, car, 'accel');
+    }
+    // distance: at most the top speed for the elapsed time (plus a small tolerance for jitter and collisions)
+    const maxAdv = MAX_REPORT_SPEED * dt + SEG_LEN * 3;
+    let delta = r.dist - car.repDist;
+    if (delta > maxAdv) {
+      delta = maxAdv;
+      flagViolation(room, conn, car, 'teleport');
+    }
+    if (delta < -SEG_LEN * 12) delta = -SEG_LEN * 12;   // no jumping back to farm laps either
+    car.repDist += delta;
+    car.dist = car.repDist;
+  }
+  if (room.phase !== 'RACING') car.repDist = car.dist;
+  car.x = Math.max(-3.5, Math.min(3.5, r.x));
+  car.speed = speed;
+  car.steerVis = Math.max(-1, Math.min(1, r.steerVis));
+  car.damage = Math.max(0, Math.min(1, r.damage));
+  car.braking = r.braking;
+  car.nitroOn = r.nitroOn;
+  car.pitting = r.pitting;
+  car.retired = r.retired || car.retired;
+  car.lastUpdateMs = now;
+}
+
+function canControl(conn: ClientConn, room: RaceRoom): boolean {
+  return conn.slot === -1 || conn.clientId === room.hostClientId;     // operator page, or the host player
+}
+
+function buildNamesPacket(room: RaceRoom): Buffer {
+  const buf = Buffer.alloc(1 + CAR_COUNT * 10);
+  buf[0] = 0xa7;
+  for (let i = 0; i < CAR_COUNT; i++) {
+    const name = room.cars[i].name || '';
+    for (let k = 0; k < 10 && k < name.length; k++) buf[1 + i * 10 + k] = name.charCodeAt(k) & 0x7f;
+  }
+  return buf;
 }
 
 function assignPlayerToRoom(
@@ -399,6 +489,9 @@ function assignPlayerToRoom(
     room.hostClientId = conn.clientId;
   }
 
+  const hostConn = room.hostClientId ? room.clients.get(room.hostClientId) : undefined;
+  if (!hostConn || hostConn.slot === -1) room.hostClientId = conn.clientId;     // a player hosts, not the operator page
+
   const car = room.cars[slot];
   car.clientId = conn.clientId;
   car.platform = platform;
@@ -410,6 +503,8 @@ function assignPlayerToRoom(
   }
   car.ready = true;
   car.retired = false;
+  car.violations = 0;
+  car.dq = false;
   car.lastUpdateMs = Date.now();
 
   conn.ws.send(
@@ -448,8 +543,14 @@ function removeClientFromRoom(conn: ClientConn) {
   }
 
   if (room.hostClientId === conn.clientId) {
-    const nextHost = room.clients.keys().next().value;
-    room.hostClientId = nextHost || '';
+    let nextHost = '';
+    for (const c of room.clients.values()) { if (c.slot !== -1) { nextHost = c.clientId; break; } }
+    if (!nextHost) nextHost = room.clients.keys().next().value || '';
+    room.hostClientId = nextHost;
+    const nh = nextHost ? room.clients.get(nextHost) : undefined;
+    if (nh && nh.binaryMode && nh.ws.readyState === WebSocket.OPEN && nh.slot >= 0) {
+      nh.ws.send(Buffer.from([0xa6, nh.slot, room.laps, room.difficulty, room.trackId, 1]), { binary: true });   // you are the host now
+    }
   }
 
   if (room.clients.size === 0 && room.code !== 'AKA1') {
@@ -485,8 +586,10 @@ function summarizeRoom(room: RaceRoom): RoomSummary {
 
 // 20 Hz Server-Authoritative Simulation Loop (50 ms tick)
 const TICK_DT = 0.05;
+let tickCount = 0;
 setInterval(() => {
   const now = Date.now();
+  tickCount++;
   for (const [code, room] of rooms.entries()) {
     if (room.clients.size === 0) {
       if (code !== 'AKA1' && now - room.lastActiveMs > 120_000) {
@@ -496,6 +599,10 @@ setInterval(() => {
     }
 
     room.lastActiveMs = now;
+    if (tickCount % 40 === 0) {      // names once in a while: a console that missed the first packet catches up
+      const np = buildNamesPacket(room);
+      for (const c of room.clients.values()) if (c.binaryMode && c.ws.readyState === WebSocket.OPEN) c.ws.send(np, { binary: true });
+    }
 
     if (room.phase === 'COUNTDOWN') {
       room.phaseTime += TICK_DT;
@@ -520,6 +627,7 @@ setInterval(() => {
           // Extrapolate smoothly if a packet is slightly delayed, and validate laps server-side
           if (now - c.lastUpdateMs > 120 && !c.finished && !c.retired) {
             c.dist += c.speed * TICK_DT * 0.85;
+            if (now - c.lastUpdateMs > 300) c.speed = Math.max(0, c.speed - MAX_SPEED * 0.5 * TICK_DT);   // silent (system menu open, lag): coast to a stop
           }
           updateCarLapProgress(room, c);
         }
@@ -575,7 +683,7 @@ async function startServer() {
       ok: true,
       server: 'AKA Turbo 3D Grand Prix Race Server',
       tickHz: 20,
-      protocolVersion: '1.2-aka',
+      protocolVersion: '1.3-aka',
       wsPath: '/ws/race',
       binaryPacketBytes: AKA_BIN_PACKET_SIZE,
       activeRooms: rooms.size,
@@ -591,7 +699,7 @@ async function startServer() {
   });
 
   const server = http.createServer(app);
-  const wss = new WebSocketServer({ server, path: '/ws/race' });
+  const wss = new WebSocketServer({ server, path: '/ws/race', maxPayload: 4096 });
 
   wss.on('connection', (ws, req) => {
     const url = new URL(req.url || '/ws/race', `http://${req.headers.host || 'localhost'}`);
@@ -606,6 +714,8 @@ async function startServer() {
       slot: CAR_COUNT - 1,
       binaryMode,
       pingMs: 12,
+      rateStart: Date.now(),
+      rateCount: 0,
     };
 
     // Optional instant query-param join for Gamebuino AKA ESP32-S3 & PC C++ clients
@@ -620,6 +730,10 @@ async function startServer() {
 
     ws.on('message', (data, isBinary) => {
       try {
+        const nowMs = Date.now();
+        if (nowMs - conn.rateStart >= 1000) { conn.rateStart = nowMs; conn.rateCount = 0; }
+        if (++conn.rateCount > MAX_PACKETS_PER_SEC * 4) { ws.close(4002, 'flood'); return; }    // way too chatty: drop the connection
+        if (conn.rateCount > MAX_PACKETS_PER_SEC) return;                                      // ignore the excess
         // Fast path: 20-byte binary telemetry packet from Gamebuino AKA ESP32-S3 or PC SDL2
         if (isBinary && Buffer.isBuffer(data) && data.length >= AKA_BIN_PACKET_SIZE && data[0] === AKA_BIN_MAGIC) {
           const room = rooms.get(conn.roomCode);
@@ -627,16 +741,17 @@ async function startServer() {
           const car = room.cars[conn.slot];
           if (!car || car.clientId !== conn.clientId) return;
           const flags = data[1] >> 3;
-          car.dist = data.readFloatLE(2);
-          car.x = Math.max(-3.5, Math.min(3.5, data.readFloatLE(6)));
-          car.speed = Math.max(0, Math.min(MAX_SPEED * 1.45, data.readFloatLE(10)));
-          car.steerVis = Math.max(-1, Math.min(1, data.readInt16LE(14) / 1000));
-          car.damage = Math.max(0, Math.min(1, data.readUInt16LE(16) / 1000));
-          car.braking = Boolean(flags & 1);
-          car.nitroOn = Boolean(flags & 2);
-          car.pitting = Boolean(flags & 4);
-          car.retired = Boolean(flags & 8);
-          car.lastUpdateMs = Date.now();
+          applyReport(room, conn, car, {
+            dist: data.readFloatLE(2),
+            x: data.readFloatLE(6),
+            speed: data.readFloatLE(10),
+            steerVis: data.readInt16LE(14) / 1000,
+            damage: data.readUInt16LE(16) / 1000,
+            braking: Boolean(flags & 1),
+            nitroOn: Boolean(flags & 2),
+            pitting: Boolean(flags & 4),
+            retired: Boolean(flags & 8),
+          });
           return;
         }
 
@@ -679,6 +794,7 @@ async function startServer() {
 
         if (msg.type === 'room:configure') {
           const p = msg.payload || {};
+          if (!canControl(conn, room)) return;
           if (room.phase === 'LOBBY' || room.phase === 'RESULTS') {
             if (typeof p.trackId === 'number') {
               room.trackId = Math.max(0, Math.min(TRACK_DEFS.length - 1, Math.trunc(p.trackId)));
@@ -702,6 +818,7 @@ async function startServer() {
         }
 
         if (msg.type === 'race:start') {
+          if (!canControl(conn, room)) return;
           if (room.phase === 'LOBBY' || room.phase === 'RESULTS') {
             resetGridPositions(room);
             room.phase = 'COUNTDOWN';
@@ -712,6 +829,7 @@ async function startServer() {
         }
 
         if (msg.type === 'race:lobby') {
+          if (!canControl(conn, room)) return;
           room.phase = 'LOBBY';
           resetGridPositions(room);
           broadcastRoom(room, 'room:state');
@@ -722,18 +840,11 @@ async function startServer() {
           const t = (msg.payload || {}) as ClientCarTelemetry;
           const car = room.cars[conn.slot];
           if (car && car.clientId === conn.clientId && (room.phase === 'RACING' || room.phase === 'COUNTDOWN')) {
-            if (room.phase === 'RACING' && Number.isFinite(t.dist)) {
-              car.dist = t.dist;
-            }
-            if (Number.isFinite(t.x)) car.x = Math.max(-3.5, Math.min(3.5, t.x));
-            if (Number.isFinite(t.speed)) car.speed = Math.max(0, Math.min(MAX_SPEED * 1.45, t.speed));
-            if (Number.isFinite(t.steerVis)) car.steerVis = Math.max(-1, Math.min(1, t.steerVis));
-            car.braking = Boolean(t.braking);
-            car.nitroOn = Boolean(t.nitroOn);
-            car.pitting = Boolean(t.pitting);
-            if (Number.isFinite(t.damage)) car.damage = Math.max(0, Math.min(1, t.damage));
-            car.retired = Boolean(t.retired);
-            car.lastUpdateMs = Date.now();
+            applyReport(room, conn, car, {
+              dist: Number(t.dist), x: Number(t.x), speed: Number(t.speed), steerVis: Number(t.steerVis) || 0,
+              damage: Number(t.damage) || 0, braking: Boolean(t.braking), nitroOn: Boolean(t.nitroOn),
+              pitting: Boolean(t.pitting), retired: Boolean(t.retired),
+            });
           }
         }
       } catch {
