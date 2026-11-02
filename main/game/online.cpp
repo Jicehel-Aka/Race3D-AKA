@@ -14,6 +14,11 @@ struct RCar { float dist, x, speed, steer; uint8_t flags, place; };
 RCar g_cars[CAR_COUNT];
 uint32_t g_fedSeq = 0;
 uint16_t g_seq = 0;
+char g_names[CAR_COUNT][12];            // names of the players, from the names packet (0xA7)
+const char* g_def[CAR_COUNT];           // default (AI) names of the race cars
+uint8_t g_prevHuman = 0, g_leftPending = 0;
+char g_leftName[12];
+bool g_kicked = false;
 const int kLapsTab[4] = { 1, 2, 3, 5 };
 
 float rdf(const uint8_t* p) { float f; memcpy(&f, p, 4); return f; }
@@ -68,7 +73,11 @@ int loadSettings(Settings& st) {
     snprintf(st.net.host, sizeof st.net.host, "aka-turbo-race-server.onrender.com");
     st.net.port = 443; st.net.tls = true;
     char buf[1024];
+#ifdef HOST_BUILD
+    if (!plat::readTextFile(settingsPath(), buf, sizeof buf)) buf[0] = 0;      // PC: no Wi-Fi to set up, the public server is the default
+#else
     if (!plat::readTextFile(settingsPath(), buf, sizeof buf)) return LOAD_NO_FILE;
+#endif
     for (char* line = buf; *line;) {
         char* nl = strchr(line, '\n');
         if (nl) *nl = 0;
@@ -94,7 +103,9 @@ int loadSettings(Settings& st) {
     clean(st.name, sizeof st.name, true);
     if (!st.room[0]) snprintf(st.room, sizeof st.room, "AKA1");
     if (!st.name[0]) snprintf(st.name, sizeof st.name, "AKA");
+#ifndef HOST_BUILD
     if (!st.net.ssid[0]) return LOAD_NO_WIFI;
+#endif
     return LOAD_OK;
 }
 
@@ -104,6 +115,8 @@ void begin(const Settings& s) {
     g_info = Info();
     memset(g_cars, 0, sizeof g_cars);
     g_fedSeq = 0; g_seq = 0;
+    memset(g_names, 0, sizeof g_names); memset(g_def, 0, sizeof g_def);
+    g_prevHuman = 0; g_leftPending = 0; g_leftName[0] = 0; g_kicked = false;
     plat::netStart(st.net);
 }
 
@@ -119,7 +132,19 @@ void poll() {
         bool bin = false;
         int n = plat::netRecv(buf, sizeof buf, &bin);
         if (n <= 0) break;
-        if (!bin) continue;
+        if (!bin) {
+            if (n < (int)sizeof buf) { buf[n] = 0; if (strstr((const char*)buf, "\"kick\"")) g_kicked = true; }
+            continue;
+        }
+        if (buf[0] == 0xA7 && n >= 1 + CAR_COUNT * 10) {
+            for (int i = 0; i < CAR_COUNT; ++i) {
+                const uint8_t* q = buf + 1 + i * 10;
+                int k = 0;
+                for (; k < 10 && q[k]; ++k) g_names[i][k] = (char)q[k];
+                g_names[i][k] = 0;
+            }
+            continue;
+        }
         if (buf[0] == 0xA6 && n >= 6) {
             g_info.haveWelcome = true;
             g_info.slot = buf[1] & 7;
@@ -144,9 +169,37 @@ void poll() {
                 if (fl & 16) human |= 1 << i;
                 if (fl & 8) ret |= 1 << i;
             }
+            if (g_info.haveSnap && g_info.phase == PH_RACING) {          // a player left during the race
+                uint8_t dropped = g_prevHuman & ~human & ~(1 << g_info.slot);
+                if (dropped) {
+                    g_leftPending |= dropped;
+                    for (int i = 0; i < CAR_COUNT; ++i) if ((dropped >> i) & 1) { snprintf(g_leftName, sizeof g_leftName, "%s", g_names[i][0] ? g_names[i] : "PLAYER"); break; }
+                }
+            }
+            g_prevHuman = human;
             g_info.humanMask = human; g_info.retiredMask = ret;
             ++g_info.snapSeq;
         }
+    }
+}
+
+bool kicked() { return g_kicked; }
+bool takeLeft(char* out, size_t cap) {
+    if (!g_leftPending) return false;
+    snprintf(out, cap, "%s", g_leftName);
+    g_leftPending = 0;
+    return true;
+}
+
+// put the players' names on the race cars (lobby, tower, results); other cars keep their own name
+void applyNames(Race& r) {
+    for (int i = 0; i < CAR_COUNT; ++i) {
+        Car& c = r.cars[i];
+        bool mine = c.name >= &g_names[0][0] && c.name < &g_names[0][0] + sizeof g_names;
+        if (!mine) g_def[i] = c.name;
+        bool human = (g_info.humanMask >> i) & 1;
+        if (human && g_names[i][0]) c.name = g_names[i];
+        else if (mine && g_def[i]) c.name = g_def[i];
     }
 }
 

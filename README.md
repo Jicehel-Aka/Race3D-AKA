@@ -43,6 +43,14 @@ Up to 8 cars per room, shared with friends: the title menu has **ONLINE RACE (WI
 3. Friends type the same `room=` on their console, or join from the browser control page (https://jicehel-aka.github.io/Race3D-AKA/).
 
 The free server sleeps when nobody plays, so the first connection can take about a minute. Only the Wi-Fi password is kept on the SD card; it is never sent to the server.
+**PC version:** same menu entry, no Wi-Fi setup: it connects through your internet connection to the public server (an optional `online.txt` next to the exe can change `room=`, `host=`...).
+
+**Player name:** choose it in the title menu (PLAYER row, on-screen keyboard, 10 characters); it is saved with the records and shown to the other players. It overrides `name=` in `online.txt`.
+
+**Leaving / fair play:** leaving a race (pause menu) hands your car to the server's computer driver and the others are told "NAME LEFT THE RACE". The server checks every report (speed, acceleration, distance, position): impossible values are clamped, repeated cheating gets the player disqualified.
+
+**Languages:** English, French, German, Spanish, Italian. Console: system menu (language); PC: LANGUAGE row of the title menu or F2. PC keys: F1 menu, F2 language, F11 fullscreen, F12 screenshot (`screenshots/`), Esc on the title screen quits.
+
 Own server: see `server/README.md`, then add `host=your-server.example.com` to `online.txt`.
 
 ## Adding a circuit

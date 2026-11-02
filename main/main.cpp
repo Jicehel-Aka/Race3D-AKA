@@ -74,6 +74,8 @@ void playSfx(int id) {
 }
 void playMusic(int song, bool restart) { s_synth.setSong(song, restart); }
 void setMusicVolume(float v) { s_synth.setMusicVolume(v); }
+const char* languageCode() { return akaRuntime.getLanguage(); }
+void setLanguageCode(const char* code) { akaRuntime.setLanguage(code); }
 
 bool saveBlob(const void* d, size_t n) {
     FILE* f = fopen(kRecordsPath, "wb");
@@ -140,6 +142,7 @@ extern "C" void app_main(void) {
         s_synth.setEngine(0, 0, 0);
         s_synth.setNoise(0, 0);
         s_synth.setMusicVolume(0);
+        plat::netStop();
     });
     mkdir("/sdcard/race3d", 0777);
 

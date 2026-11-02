@@ -4,6 +4,10 @@
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -36,13 +40,14 @@ bool loadBlob(void* d, size_t n) {
     FILE* f = fopen("race3d_records.bin", "rb"); if (!f) return false;
     size_t r = fread(d, 1, n, f); fclose(f); return r == n;
 }
-// online races are only available on the console (Wi-Fi); the PC build has no network backend
-void netStart(const NetConfig&) {}
-void netStop() {}
-int netStatus() { return NET_FAILED; }
-const char* netError() { return "PC: NOT AVAILABLE"; }
-bool netSend(bool, const void*, size_t) { return false; }
-int netRecv(void*, size_t, bool*) { return 0; }
+static char s_lang[4] = "en";
+const char* languageCode() { return s_lang; }
+void setLanguageCode(const char* code) {
+    if (!code || !code[0]) return;
+    snprintf(s_lang, sizeof s_lang, "%s", code);
+    if (s_headless) return;
+    FILE* f = fopen("race3d_lang.txt", "wb"); if (f) { fputs(s_lang, f); fclose(f); }
+}
 bool readTextFile(const char* path, char* buf, size_t cap) {
     const char* base = strrchr(path, '/'); base = base ? base + 1 : path;      // PC: online.txt next to the exe
     FILE* f = fopen(base, "rb"); if (!f) return false;
@@ -59,6 +64,24 @@ static void save_ppm(const char* path) {
         unsigned char px[3] = { (unsigned char)r, (unsigned char)g, (unsigned char)b };
         fwrite(px, 1, 3, f);
     }
+    fclose(f);
+}
+
+// screenshot: 24-bit BMP in ./screenshots (opens everywhere on Windows)
+static void save_bmp(const char* path) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return;
+    const int w = gfx::W, h = gfx::H, row = w * 3, size = 54 + row * h;     // 320*3 is a multiple of 4: no padding
+    unsigned char hd[54] = { 'B', 'M' };
+    auto put = [&](int off, uint32_t v, int n) { for (int i = 0; i < n; ++i) hd[off + i] = (unsigned char)(v >> (8 * i)); };
+    put(2, size, 4); put(10, 54, 4); put(14, 40, 4); put(18, w, 4); put(22, h, 4); put(26, 1, 2); put(28, 24, 2); put(34, row * h, 4);
+    fwrite(hd, 1, 54, f);
+    for (int y = h - 1; y >= 0; --y)
+        for (int x = 0; x < w; ++x) {
+            int r, g, b; gfx::unpack(s_fb[y * w + x], r, g, b);
+            unsigned char px[3] = { (unsigned char)b, (unsigned char)g, (unsigned char)r };
+            fwrite(px, 1, 3, f);
+        }
     fclose(f);
 }
 
@@ -143,6 +166,7 @@ int main(int argc, char** argv) {
     if (dev) SDL_PauseAudioDevice(dev, 0);
 
     gfx::fb = s_fb;
+    { FILE* lf = fopen("race3d_lang.txt", "rb"); if (lf) { char c[8] = ""; if (fgets(c, sizeof c, lf)) { c[2] = 0; plat::setLanguageCode(c); } fclose(lf); } }
     game_init();
     uint32_t last = SDL_GetTicks();
     uint32_t prevHeld = 0;
@@ -152,6 +176,26 @@ int main(int argc, char** argv) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) running = false;
+            if (e.type == SDL_KEYDOWN && !e.key.repeat) {
+                SDL_Scancode sc = e.key.keysym.scancode;
+                if (sc == SDL_SCANCODE_ESCAPE && game_is_title()) running = false;            // Esc on the title screen = quit
+                if (sc == SDL_SCANCODE_F1) game_request_title();                              // back to the menu
+                if (sc == SDL_SCANCODE_F2) {                                                  // next language
+                    static const char* const codes[] = { "en", "fr", "de", "es", "it" };
+                    int cur = 0;
+                    for (int i = 0; i < 5; ++i) if (!strcmp(plat::languageCode(), codes[i])) cur = i;
+                    plat::setLanguageCode(codes[(cur + 1) % 5]);
+                }
+                if (sc == SDL_SCANCODE_F12) {                                                 // screenshot
+#ifdef _WIN32
+                    _mkdir("screenshots");
+#else
+                    mkdir("screenshots", 0777);
+#endif
+                    char path[96]; snprintf(path, sizeof path, "screenshots/shot_%u.bmp", (unsigned)SDL_GetTicks());
+                    save_bmp(path);
+                }
+            }
             if (e.type == SDL_KEYDOWN && !e.key.repeat && e.key.keysym.scancode == SDL_SCANCODE_F11) {
                 fullscreen = !fullscreen;
                 SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);

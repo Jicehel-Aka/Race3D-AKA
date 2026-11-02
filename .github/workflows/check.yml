@@ -25,6 +25,13 @@ jobs:
             g++ -std=c++17 -Wall -Wextra -DHOST_BUILD -I main -I main/game -c main/game/$f.cpp -o /tmp/$f.o
           done
 
+      - name: Version PC (SDL2 + réseau OpenSSL) sous Linux
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev libssl-dev
+          g++ -O1 -std=c++17 -Wall -DHOST_BUILD -DHAVE_OPENSSL -I main -I . host/host_main.cpp host/net_pc.cpp main/game/*.cpp \
+              -o /tmp/AKATurbo3D $(sdl2-config --cflags --libs) -lssl -lcrypto -lpthread
+
   firmware:
     runs-on: ubuntu-latest
     container: espressif/idf:v5.5.1

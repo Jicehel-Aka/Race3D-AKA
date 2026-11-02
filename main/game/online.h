@@ -2,6 +2,7 @@
 // lobby information and the replicated cars. The transport (Wi-Fi / TLS / WebSocket) lives behind plat::net*.
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 #include "platform.h"
 
 class Race;
@@ -40,6 +41,10 @@ const char* error();
 bool isOnline();                    // connected to the server
 void poll();                        // call every frame: consumes the received messages
 const Info& info();
+
+bool kicked();                      // the server disqualified us (anti-cheat)
+bool takeLeft(char* out, size_t cap);   // true once when another player left during the race (name in out)
+void applyNames(Race& r);           // players' names on the cars
 
 void sendConfigure(int track, int laps, int diff);   // host only
 void sendStart();

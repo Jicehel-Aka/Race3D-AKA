@@ -1,5 +1,6 @@
 // render.cpp - the "OutRun style" segment renderer and everything on top.
 #include "render.h"
+#include "i18n.h"
 #include "car_art.h"
 #include "gfx.h"
 #include "platform.h"
@@ -1086,9 +1087,6 @@ void render_tower(const Race& r, int x, int y) {
     }
 }
 
-static const char* ordinal(int p) {
-    switch (p) { case 1: return "ST"; case 2: return "ND"; case 3: return "RD"; default: return "TH"; }
-}
 
 void render_hud(const Race& r, float time) {
     const Car& pl = r.player();
@@ -1097,7 +1095,7 @@ void render_hud(const Race& r, float time) {
     // position
     snprintf(buf, sizeof buf, "%d", pl.place);
     textFancy(8, 6, buf, rgb(255, 246, 120), rgb(255, 120, 20), rgb(30, 10, 10), 4);
-    textFancy(8 + 34, 8, ordinal(pl.place), rgb(255, 246, 120), rgb(255, 140, 30), rgb(30, 10, 10), 2);
+    textFancy(8 + 34, 8, i18n::ordinal(pl.place), rgb(255, 246, 120), rgb(255, 140, 30), rgb(30, 10, 10), 2);
     snprintf(buf, sizeof buf, "/%d", CAR_COUNT);
     textOutline(8 + 36, 26, buf, rgb(255, 255, 255), rgb(0, 0, 0));
     render_tower(r, 6, 44);
@@ -1105,15 +1103,15 @@ void render_hud(const Race& r, float time) {
     // lap + times
     snprintf(buf, sizeof buf, "%d/%d", r.playerLap(), r.laps);
     int lw = textWidth(buf, 3);
-    textOutline(W - 8 - lw - 28, 12, "LAP", rgb(255, 255, 255), rgb(0, 0, 0));
+    { const char* ll = TR("LAP"); textOutline(W - 8 - lw - textWidth(ll) - 4, 12, ll, rgb(255, 255, 255), rgb(0, 0, 0)); }
     textFancy(W - 8 - lw, 6, buf, rgb(255, 255, 255), rgb(140, 200, 255), rgb(10, 20, 40), 3);
     char t1[16], t2[16];
     format_time(t1, r.raceTime - pl.lapStart);
-    snprintf(buf, sizeof buf, "TIME %s", t1);
+    snprintf(buf, sizeof buf, "%s %s", TR("TIME"), t1);
     textOutline(W - 8 - textWidth(buf), 36, buf, rgb(255, 255, 255), rgb(0, 0, 0));
     if (pl.bestLap > 0) {
         format_time(t2, pl.bestLap);
-        snprintf(buf, sizeof buf, "BEST %s", t2);
+        snprintf(buf, sizeof buf, "%s %s", TR("BEST"), t2);
         textOutline(W - 8 - textWidth(buf), 47, buf, rgb(255, 220, 90), rgb(0, 0, 0));
     }
 
@@ -1142,7 +1140,7 @@ void render_hud(const Race& r, float time) {
     fillCircle(cx, cy, 3, rgb(240, 240, 240));
     snprintf(buf, sizeof buf, "%d", (int)kmh);
     textFancy(cx - textWidth(buf, 2) / 2, cy + 8, buf, rgb(255, 255, 255), rgb(170, 220, 255), rgb(0, 0, 0), 2);
-    text(cx - 16, cy + 26, "KM/H", rgb(180, 180, 200));
+    text(cx - 16, cy + 26, TR("KM/H"), rgb(180, 180, 200));
     snprintf(buf, sizeof buf, "%d", r.gear);
     textOutline(cx - 4, cy - 18, buf, rgb(255, 210, 60), rgb(0, 0, 0));
 
@@ -1156,7 +1154,7 @@ void render_hud(const Race& r, float time) {
         hline(gx, gx + 6, gy + gh - 1 - y, c);
     }
     rect(gx - 2, gy - 2, 10, gh + 4, rgb(200, 220, 255));
-    text(gx - 9, gy - 12, "N2O", r.nitro > 0.99f ? rgb(120, 255, 255) : rgb(150, 170, 200));
+    text(gx - 9, gy - 12, TR("N2O"), r.nitro > 0.99f ? rgb(120, 255, 255) : rgb(150, 170, 200));
 
     // engine health gauge (full when mint, empties as damage grows)
     {
@@ -1172,6 +1170,6 @@ void render_hud(const Race& r, float time) {
             hline(hx, hx + 6, gy + gh - 1 - y, c);
         }
         rect(hx - 2, gy - 2, 10, gh + 4, blink ? rgb(255, 80, 60) : rgb(200, 220, 255));
-        text(hx - 4, gy - 22, "ENG", r.damage > 0.5f ? rgb(255, 140, 90) : rgb(150, 170, 200));
+        text(hx - 4, gy - 22, TR("ENG"), r.damage > 0.5f ? rgb(255, 140, 90) : rgb(150, 170, 200));
     }
 }

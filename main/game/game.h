@@ -15,3 +15,4 @@ bool game_paused();
 class Race;
 Race* game_debug_race();
 void game_debug_select(int track, int difficulty, int lapsIndex);
+bool game_is_title();   // true on the title screen (PC: Esc quits there)

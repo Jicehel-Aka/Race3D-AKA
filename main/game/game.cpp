@@ -6,6 +6,7 @@
 #include "sprites.h"
 #include "music.h"
 #include "online.h"
+#include "i18n.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,16 +15,31 @@ using namespace gfx;
 
 namespace {
 
-enum State { ST_TITLE, ST_COUNTDOWN, ST_RACING, ST_FINISHED, ST_RESULTS, ST_ONLINE };
+enum State { ST_TITLE, ST_COUNTDOWN, ST_RACING, ST_FINISHED, ST_RESULTS, ST_ONLINE, ST_NAME };
 
+constexpr int NAME_MAX = 10;
+void panel(int x, int y, int w, int h);
+int fit_scale(const char* s, int scale) { while (scale > 1 && textWidth(s, scale) > W - 12) --scale; return scale; }
+const char* player_name();
 struct Records {
     uint32_t magic;
     float bestLap[TRACK_COUNT];
     float bestRace[TRACK_COUNT][DIFF_COUNT];
     uint8_t bestPlace[TRACK_COUNT][DIFF_COUNT];
     uint8_t musicOff;
+    char name[NAME_MAX + 2];      // player name (online races), kept between sessions
 };
-constexpr uint32_t REC_MAGIC = 0x52443303;
+constexpr uint32_t REC_MAGIC = 0x52443304;
+
+// Records file of version 1.1 (no player name): still read.
+struct RecordsV3 {
+    uint32_t magic;
+    float bestLap[TRACK_COUNT];
+    float bestRace[TRACK_COUNT][DIFF_COUNT];
+    uint8_t bestPlace[TRACK_COUNT][DIFF_COUNT];
+    uint8_t musicOff;
+};
+constexpr uint32_t REC_MAGIC_V3 = 0x52443303;
 
 // Records file of version 1.0 (3 circuits): still read so players keep their times.
 struct RecordsV1 {
@@ -43,13 +59,14 @@ float g_stateT = 0;        // time in current state
 bool g_paused = false;
 int g_pauseSel = 0;
 
-int g_menuSel = 4;
-constexpr int MENU_ITEMS = 6;   // track, difficulty, laps, music, start, online
+int g_menuSel = 6;
+constexpr int MENU_ITEMS = 8;   // track, difficulty, laps, music, language, player name, start, online
+constexpr int MI_LANG = 4, MI_NAME = 5, MI_START = 6, MI_ONLINE = 7;
 volatile bool g_titleRequest = false;
 int g_track = 0, g_diff = DIFF_NORMAL, g_lapsSel = 2;
 const int kLaps[] = { 1, 2, 3, 5 };
 
-char g_msg[24] = "";
+char g_msg[40] = "";
 float g_msgT = 0;
 uint16_t g_msgTop = 0, g_msgBot = 0;
 bool g_newLapRecord = false, g_newRaceRecord = false;
@@ -72,12 +89,20 @@ const char* const kDiffDesc[DIFF_COUNT] = {
 };
 
 void message(const char* s, uint16_t top, uint16_t bot, float dur = 1.6f) {
-    strncpy(g_msg, s, sizeof g_msg - 1);
+    strncpy(g_msg, TR(s), sizeof g_msg - 1);
+    g_msg[sizeof g_msg - 1] = 0;
     g_msgTop = top; g_msgBot = bot; g_msgT = dur;
 }
 
 void load_records() {
-    if (plat::loadBlob(&g_rec, sizeof g_rec) && g_rec.magic == REC_MAGIC) return;
+    if (plat::loadBlob(&g_rec, sizeof g_rec) && g_rec.magic == REC_MAGIC) { g_rec.name[NAME_MAX] = 0; return; }
+    RecordsV3 v3;
+    if (plat::loadBlob(&v3, sizeof v3) && v3.magic == REC_MAGIC_V3) {
+        memset(&g_rec, 0, sizeof g_rec);
+        g_rec.magic = REC_MAGIC;
+        memcpy(&g_rec.bestLap, &v3.bestLap, sizeof v3 - sizeof(uint32_t));
+        return;
+    }
     memset(&g_rec, 0, sizeof g_rec);
     g_rec.magic = REC_MAGIC;
     RecordsV1 old;
@@ -164,6 +189,71 @@ void start_online_race() {
     plat::playSfx(plat::SFX_MENU_OK);
 }
 
+// ------------------------------------------------------------ player name editor (on-screen keyboard)
+char g_edit[NAME_MAX + 2] = "";
+int g_editLen = 0, g_kx = 0, g_ky = 0;
+const char* const kKeys[4] = { "ABCDEFGHIJ", "KLMNOPQRST", "UVWXYZ0123", "456789-_" };
+
+void open_name_editor() {
+    strncpy(g_edit, g_rec.name, NAME_MAX); g_edit[NAME_MAX] = 0;
+    g_editLen = (int)strlen(g_edit);
+    g_kx = 0; g_ky = 0;
+    g_state = ST_NAME; g_stateT = 0;
+    plat::playSfx(plat::SFX_MENU_OK);
+}
+
+void close_name_editor(bool save) {
+    if (save && g_editLen > 0) {
+        memcpy(g_rec.name, g_edit, sizeof g_rec.name);
+        plat::saveBlob(&g_rec, sizeof g_rec);
+    }
+    g_state = ST_TITLE; g_stateT = 0;
+    plat::playSfx(plat::SFX_MENU_OK);
+}
+
+void update_name_editor(const plat::Input& in) {
+    if (in.pressed & plat::BTN_LEFT) g_kx = (g_kx + 9) % 10;
+    if (in.pressed & plat::BTN_RIGHT) g_kx = (g_kx + 1) % 10;
+    if (in.pressed & plat::BTN_UP) g_ky = (g_ky + 3) % 4;
+    if (in.pressed & plat::BTN_DOWN) g_ky = (g_ky + 1) % 4;
+    if (in.pressed & (plat::BTN_LEFT | plat::BTN_RIGHT | plat::BTN_UP | plat::BTN_DOWN)) plat::playSfx(plat::SFX_MENU_MOVE);
+    bool del = (g_ky == 3 && g_kx == 8), ok = (g_ky == 3 && g_kx == 9);
+    if (in.pressed & plat::BTN_A) {
+        if (ok) { close_name_editor(true); return; }
+        if (del) { if (g_editLen > 0) g_edit[--g_editLen] = 0; }
+        else if (g_editLen < NAME_MAX) { g_edit[g_editLen++] = kKeys[g_ky][g_kx]; g_edit[g_editLen] = 0; }
+        plat::playSfx(plat::SFX_MENU_MOVE);
+    }
+    if ((in.pressed & plat::BTN_B) && g_editLen > 0) { g_edit[--g_editLen] = 0; plat::playSfx(plat::SFX_MENU_MOVE); }
+    if (in.pressed & plat::BTN_RUN) close_name_editor(true);
+}
+
+void draw_name_editor() {
+    render_world(g_race, g_time);
+    darkRect(0, 0, W, H);
+    const char* title = TR("PLAYER NAME");
+    { int sc = fit_scale(title, 2); textFancy(W / 2 - textWidth(title, sc) / 2, 14, title, rgb(170, 230, 255), rgb(60, 130, 255), rgb(0, 0, 30), sc); }
+    panel(40, 44, W - 80, 28);
+    char shown[NAME_MAX + 4];
+    snprintf(shown, sizeof shown, "%s%s", g_edit, ((int)(g_time * 3) & 1) && g_editLen < NAME_MAX ? "_" : "");
+    textOutline(W / 2 - textWidth(shown, 2) / 2, 52, shown, rgb(255, 240, 120), rgb(0, 0, 0), 2);
+    panel(40, 84, W - 80, 104);
+    for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 10; ++c) {
+            int x = 52 + c * 22, y = 94 + r * 22;
+            bool sel = g_kx == c && g_ky == r;
+            char label[8]; label[0] = 0;
+            if (r < 3 || c < 8) { label[0] = kKeys[r][c]; label[1] = 0; }
+            else snprintf(label, sizeof label, "%s", c == 8 ? "<" : "OK");
+            if (sel) blendRect(x - 2, y - 3, 20, 18, rgb(255, 200, 40), 130);
+            else rect(x - 2, y - 3, 20, 18, rgb(70, 70, 110));
+            text(x + 8 - textWidth(label) / 2, y + 2, label, sel ? rgb(255, 255, 255) : rgb(190, 200, 230));
+        }
+    }
+    const char* h = TR("A: ADD   B: DELETE   RUN: OK");
+    text(W / 2 - textWidth(h) / 2, 204, h, rgb(200, 200, 230));
+}
+
 void enter_online_lobby() {
     g_onlineRace = false;
     g_state = ST_ONLINE; g_stateT = 0; g_paused = false;
@@ -173,6 +263,8 @@ void enter_online_lobby() {
 
 void go_online() {
     g_loadRes = online::loadSettings(g_set);
+    if (!g_rec.name[0] && g_set.name[0]) { snprintf(g_rec.name, sizeof g_rec.name, "%s", g_set.name); plat::saveBlob(&g_rec, sizeof g_rec); }
+    snprintf(g_set.name, sizeof g_set.name, "%s", player_name());     // the name chosen in the game wins over the file
     g_cfgSent = false;
     if (g_loadRes == online::LOAD_OK) { online::begin(g_set); g_online = true; }
     g_state = ST_ONLINE; g_stateT = 0; g_lastPhase = 0;
@@ -180,19 +272,27 @@ void go_online() {
 }
 
 // when the link drops during a race the other cars go back to the local AI
-void online_lost() {
+void online_lost(bool dq = false) {
     if (g_lost) return;
     g_lost = true;
     for (int i = 0; i < CAR_COUNT; ++i) {
         Car& c = g_race.cars[i];
         if (c.remote) { c.remote = false; c.targetX = c.x; c.retired = false; }
     }
-    message("CONNECTION LOST", rgb(255, 120, 100), rgb(160, 20, 10), 3.0f);
+    if (dq) message("DISQUALIFIED", rgb(255, 90, 70), rgb(120, 10, 10), 4.0f);
+    else message("CONNECTION LOST", rgb(255, 120, 100), rgb(160, 20, 10), 3.0f);
 }
 
 // online per-frame work during a race: read the network, follow the other cars, send ours at 20 Hz
 void online_tick(float dt) {
     online::poll();
+    if (online::kicked() && !g_lost) { online_lost(true); return; }
+    online::applyNames(g_race);
+    char who[12];
+    if (online::takeLeft(who, sizeof who)) {
+        char m[40]; snprintf(m, sizeof m, "%s %s", who, TR("LEFT THE RACE"));
+        message(m, rgb(255, 210, 120), rgb(150, 70, 10), 2.5f);
+    }
     if (!g_lost && !online::isOnline()) { online_lost(); return; }
     if (g_lost) return;
     online::feed(g_race);
@@ -229,57 +329,64 @@ void draw_logo(int y) {
     }
 }
 
+const char* player_name() { return g_rec.name[0] ? g_rec.name : "PLAYER"; }
+
 void draw_title() {
     render_world(g_race, g_time);
     // vignette at the top for the logo
     for (int y = 0; y < 70; ++y) blendRect(0, y, W, 1, rgb(0, 0, 0), (70 - y) * 2);
     draw_logo(10);
 
-    const int px = 24, py = 112, pw = W - 48, ph = 126;
+    const int px = 16, py = 68, pw = W - 32, ph = 154;
     panel(px, py, pw, ph);
     char buf[48];
-    const char* labels[4] = { "TRACK", "DIFFICULTY", "LAPS", "MUSIC" };
-    for (int i = 0; i < 4; ++i) {
-        int y = py + 7 + i * 15;
+    const char* labels[6] = { "TRACK", "DIFFICULTY", "LAPS", "MUSIC", "LANGUAGE", "PLAYER" };
+    for (int i = 0; i < 6; ++i) {
+        int y = py + 7 + i * 14;
         bool sel = g_menuSel == i;
-        if (sel) blendRect(px + 4, y - 3, pw - 8, 14, rgb(255, 200, 40), 80);
-        text(px + 12, y, labels[i], sel ? rgb(255, 230, 90) : rgb(170, 170, 200));
-        const char* v = i == 0 ? g_trackDefs[g_track].name : (i == 1 ? g_diffNames[g_diff] : nullptr);
+        if (sel) blendRect(px + 4, y - 3, pw - 8, 13, rgb(255, 200, 40), 80);
+        text(px + 10, y, TR(labels[i]), sel ? rgb(255, 230, 90) : rgb(170, 170, 200));
+        const char* v = i == 0 ? g_trackDefs[g_track].name : (i == 1 ? TR(g_diffNames[g_diff]) : nullptr);
         if (i == 2) { snprintf(buf, sizeof buf, "%d", kLaps[g_lapsSel]); v = buf; }
-        if (i == 3) v = g_rec.musicOff ? "OFF" : g_songs[g_trackDefs[g_track].music].title;
-        int vx = px + 110;
+        if (i == 3) v = g_rec.musicOff ? TR("OFF") : g_songs[g_trackDefs[g_track].music].title;
+        if (i == 4) v = i18n::nativeName(i18n::language());
+        if (i == 5) v = player_name();
+        int vx = px + 124;
         if (sel) {
             bool blink = ((int)(g_time * 4) & 1);
-            text(vx - 14 - (blink ? 1 : 0), y, "<", rgb(255, 255, 255));
-            text(vx + 132 + (blink ? 1 : 0), y, ">", rgb(255, 255, 255));
+            if (i != 5) text(vx - 14 - (blink ? 1 : 0), y, "<", rgb(255, 255, 255));
+            if (i != 5) text(vx + 132 + (blink ? 1 : 0), y, ">", rgb(255, 255, 255));
+            else text(vx + 132, y, "A", rgb(255, 255, 255));
         }
         uint16_t vc = rgb(255, 255, 255);
         if (i == 3 && g_rec.musicOff) vc = rgb(150, 150, 170);
         if (i == 1) { const uint16_t dc[] = { rgb(120, 255, 140), rgb(140, 210, 255), rgb(255, 190, 70), rgb(255, 80, 80) }; vc = dc[g_diff]; }
+        if (i == 5) vc = rgb(140, 230, 255);
         textOutline(vx + 66 - textWidth(v) / 2, y, v, vc, rgb(0, 0, 0));
     }
-    text(px + 12, py + 65, kDiffDesc[g_diff], rgb(150, 150, 180));
+    text(px + 10, py + 92, TR(kDiffDesc[g_diff]), rgb(150, 150, 180));
 
     // records for the selection
     char t[16];
-    if (g_rec.bestLap[g_track] > 0) { format_time(t, g_rec.bestLap[g_track]); snprintf(buf, sizeof buf, "LAP RECORD %s", t); }
-    else snprintf(buf, sizeof buf, "LAP RECORD --'--\"--");
-    text(px + 12, py + 76, buf, rgb(255, 220, 110));
+    if (g_rec.bestLap[g_track] > 0) { format_time(t, g_rec.bestLap[g_track]); snprintf(buf, sizeof buf, "%s %s", TR("LAP RECORD"), t); }
+    else snprintf(buf, sizeof buf, "%s --'--\"--", TR("LAP RECORD"));
+    text(px + 10, py + 103, buf, rgb(255, 220, 110));
     uint8_t bp = g_rec.bestPlace[g_track][g_diff];
-    if (bp) { snprintf(buf, sizeof buf, "BEST: P%d", bp); text(px + pw - 12 - textWidth(buf), py + 76, buf, rgb(255, 220, 110)); }
+    if (bp) { snprintf(buf, sizeof buf, "%s: P%d", TR("BEST"), bp); text(px + pw - 10 - textWidth(buf), py + 103, buf, rgb(255, 220, 110)); }
 
-    bool sel = g_menuSel == 4;
-    const char* go = "START RACE";
+    bool sel = g_menuSel == MI_START;
+    const char* go = TR("START RACE");
+    int gs = textWidth(go, 2) <= pw - 40 ? 2 : 1;
     int k = sel ? (int)(sinf(g_time * 6) * 60 + 196) : 140;
-    int sw = textWidth(go, 2);
-    if (sel) blendRect(W / 2 - sw / 2 - 10, py + 87, sw + 20, 20, rgb(255, 60, 40), 120);
-    textFancy(W / 2 - sw / 2, py + 89, go, scale(rgb(255, 255, 255), k), scale(rgb(255, 210, 60), k), rgb(40, 0, 0), 2);
+    int sw = textWidth(go, gs);
+    if (sel) blendRect(W / 2 - sw / 2 - 10, py + 114, sw + 20, gs == 2 ? 20 : 12, rgb(255, 60, 40), 120);
+    textFancy(W / 2 - sw / 2, py + 116, go, scale(rgb(255, 255, 255), k), scale(rgb(255, 210, 60), k), rgb(40, 0, 0), gs);
     {   // online race entry
-        bool on = g_menuSel == 5;
-        const char* ol = "ONLINE RACE (WI-FI)";
+        bool on = g_menuSel == MI_ONLINE;
+        const char* ol = TR("ONLINE RACE (WI-FI)");
         int ow = textWidth(ol);
-        if (on) blendRect(W / 2 - ow / 2 - 8, py + 109, ow + 16, 13, rgb(60, 160, 255), 120);
-        text(W / 2 - ow / 2, py + 112, ol, on ? rgb(255, 255, 255) : rgb(150, 190, 235));
+        if (on) blendRect(W / 2 - ow / 2 - 8, py + 137, ow + 16, 13, rgb(60, 160, 255), 120);
+        text(W / 2 - ow / 2, py + 140, ol, on ? rgb(255, 255, 255) : rgb(150, 190, 235));
     }
 }
 
@@ -302,12 +409,13 @@ void draw_lights() {
             fillCircle(x - 3, y - 3, 3, lerp(c, 0xFFFF, 160));
         }
     }
-    if (t < 1.0f) textCentered(cx, y + 26, "GET READY", rgb(255, 255, 255), rgb(0, 0, 0), 2);
+    if (t < 1.0f) textCentered(cx, y + 26, TR("GET READY"), rgb(255, 255, 255), rgb(0, 0, 0), fit_scale(TR("GET READY"), 2));
 }
 
 void draw_message() {
     if (g_msgT <= 0) return;
     int s = 3;
+    while (s > 1 && textWidth(g_msg, s) > W - 8) --s;      // translated texts can be longer: shrink to fit
     int w = textWidth(g_msg, s);
     int y = 92 + (g_msgT > 1.4f ? (int)((g_msgT - 1.4f) * 80) : 0);
     if (((int)(g_msgT * 10) & 1) || g_msgT < 1.0f)
@@ -317,8 +425,8 @@ void draw_message() {
 void draw_pause() {
     darkRect(0, 0, W, H);
     panel(W / 2 - 80, 70, 160, 100);
-    textCentered(W / 2, 80, "PAUSED", rgb(255, 230, 90), rgb(0, 0, 0), 3);
-    const char* items[3] = { "RESUME", g_onlineRace ? "(LIVE RACE)" : "RESTART", g_onlineRace ? "LEAVE THE RACE" : "QUIT TO MENU" };
+    textCentered(W / 2, 80, TR("PAUSED"), rgb(255, 230, 90), rgb(0, 0, 0), fit_scale(TR("PAUSED"), 3));
+    const char* items[3] = { TR("RESUME"), g_onlineRace ? TR("(LIVE RACE)") : TR("RESTART"), g_onlineRace ? TR("LEAVE THE RACE") : TR("QUIT TO MENU") };
     for (int i = 0; i < 3; ++i) {
         int y = 116 + i * 16;
         bool sel = g_pauseSel == i;
@@ -330,13 +438,13 @@ void draw_pause() {
 void draw_results() {
     render_world(g_race, g_time);
     darkRect(0, 0, W, H);
-    const char* title = "RACE RESULTS";
-    textFancy(W / 2 - textWidth(title, 3) / 2, 8, title, rgb(255, 250, 150), rgb(255, 120, 30), rgb(40, 0, 0), 3);
+    const char* title = TR("RACE RESULTS");
+    { int sc = fit_scale(title, 3); textFancy(W / 2 - textWidth(title, sc) / 2, 8, title, rgb(255, 250, 150), rgb(255, 120, 30), rgb(40, 0, 0), sc); }
     panel(12, 40, W - 24, 152);
-    text(22, 46, "POS", rgb(150, 150, 190));
-    text(62, 46, "DRIVER", rgb(150, 150, 190));
-    text(170, 46, "TIME", rgb(150, 150, 190));
-    text(244, 46, "BEST LAP", rgb(150, 150, 190));
+    text(22, 46, TR("POS"), rgb(150, 150, 190));
+    text(62, 46, TR("DRIVER"), rgb(150, 150, 190));
+    text(170, 46, TR("TIME"), rgb(150, 150, 190));
+    text(244, 46, TR("BEST LAP"), rgb(150, 150, 190));
     int order[CAR_COUNT];
     for (int k = 0; k < CAR_COUNT; ++k) order[g_race.cars[k].place - 1] = k;
     float winner = g_race.cars[order[0]].finishTime;
@@ -352,7 +460,7 @@ void draw_results() {
         fillRect(44, y, 12, 8, c.livery.body);
         rect(44, y, 12, 8, c.livery.stripe);
         textOutline(62, y, c.name, c.isPlayer ? rgb(255, 240, 120) : rgb(255, 255, 255), rgb(0, 0, 0));
-        if (c.retired) snprintf(t, sizeof t, "DNF");
+        if (c.retired) snprintf(t, sizeof t, "%s", TR("DNF"));
         else if (i == 0) format_time(t, c.finishTime);
         else { float gap = c.finishTime - winner; snprintf(t, sizeof t, "+%d.%02d", (int)gap, (int)(gap * 100) % 100); }
         textOutline(170, y, t, rgb(255, 255, 255), rgb(0, 0, 0));
@@ -360,52 +468,51 @@ void draw_results() {
     }
     const Car& p = g_race.player();
     char buf[40];
-    static const char* const ord[] = { "", "1ST", "2ND", "3RD", "4TH", "5TH", "6TH", "7TH", "8TH" };
-    if (p.retired) snprintf(buf, sizeof buf, "ENGINE FAILURE");
-    else snprintf(buf, sizeof buf, "YOU FINISHED %s", ord[p.place]);
+    if (p.retired) snprintf(buf, sizeof buf, "%s", TR("ENGINE FAILURE"));
+    else snprintf(buf, sizeof buf, "%s %d%s", TR("YOU FINISHED"), p.place, i18n::ordinal(p.place));
     textCentered(W / 2, 198, buf, p.place == 1 ? rgb(255, 230, 60) : rgb(255, 255, 255), rgb(0, 0, 0), 2);
     if ((g_newLapRecord || g_newRaceRecord) && ((int)(g_time * 3) & 1))
-        textCentered(W / 2, 216, g_newRaceRecord ? "NEW RACE RECORD!" : "NEW LAP RECORD!", rgb(120, 255, 160), rgb(0, 0, 0));
-    if (g_stateT > 1.5f) { const char* f = g_onlineRace ? "A: BACK TO LOBBY   B: LEAVE" : "A: RACE AGAIN   B: MENU"; text(W / 2 - textWidth(f) / 2, 230, f, rgb(200, 200, 230)); }
+        textCentered(W / 2, 216, g_newRaceRecord ? TR("NEW RACE RECORD!") : TR("NEW LAP RECORD!"), rgb(120, 255, 160), rgb(0, 0, 0));
+    if (g_stateT > 1.5f) { const char* f = g_onlineRace ? TR("A: BACK TO LOBBY   B: LEAVE") : TR("A: RACE AGAIN   B: MENU"); text(W / 2 - textWidth(f) / 2, 230, f, rgb(200, 200, 230)); }
 }
 
 void draw_online() {
     render_world(g_race, g_time);
     darkRect(0, 0, W, H);
-    const char* title = "ONLINE RACE";
-    textFancy(W / 2 - textWidth(title, 3) / 2, 6, title, rgb(170, 230, 255), rgb(60, 130, 255), rgb(0, 0, 30), 3);
+    const char* title = TR("ONLINE RACE");
+    { int sc = fit_scale(title, 3); textFancy(W / 2 - textWidth(title, sc) / 2, 6, title, rgb(170, 230, 255), rgb(60, 130, 255), rgb(0, 0, 30), sc); }
     panel(12, 34, W - 24, 196);
     const online::Info& in = online::info();
     int st = online::status();
     char buf[64];
     const uint16_t white = rgb(255, 255, 255), grey = rgb(150, 150, 190);
     if (g_loadRes != online::LOAD_OK) {
-        textCentered(W / 2, 46, g_loadRes == online::LOAD_NO_FILE ? "SETTINGS FILE NOT FOUND" : "NO WI-FI NAME IN THE FILE", rgb(255, 150, 110), rgb(0, 0, 0));
-        text(24, 66, "Create this text file on the SD card:", grey);
+        textCentered(W / 2, 46, g_loadRes == online::LOAD_NO_FILE ? TR("SETTINGS FILE NOT FOUND") : TR("NO WI-FI NAME IN THE FILE"), rgb(255, 150, 110), rgb(0, 0, 0));
+        text(24, 66, TR("Create this text file on the SD card:"), grey);
         text(24, 80, online::settingsPath(), rgb(255, 230, 120));
         text(24, 100, "ssid=MyWifiName", white);
         text(24, 112, "pass=MyWifiPassword", white);
         text(24, 124, "room=AKA1", white);
         text(24, 136, "name=PILOT", white);
-        text(24, 156, "The public race server is already filled in.", grey);
-        text(24, 168, "Friends use the same room name to race together.", grey);
-        text(24, 180, "See online.example.txt in the sdcard pack.", grey);
-        text(W / 2 - textWidth("B: BACK") / 2, 214, "B: BACK", rgb(200, 200, 230));
+        text(24, 156, TR("The public race server is already filled in."), grey);
+        text(24, 168, TR("Friends use the same room name to race together."), grey);
+        text(24, 180, TR("See online.example.txt in the sdcard pack."), grey);
+        text(W / 2 - textWidth(TR("B: BACK")) / 2, 214, TR("B: BACK"), rgb(200, 200, 230));
         return;
     }
     // status line
     const char* msg = "";
     uint16_t mc = rgb(255, 230, 120);
-    if (st == plat::NET_WIFI) msg = "JOINING WI-FI...";
-    else if (st == plat::NET_CONNECTING) msg = "CONNECTING TO THE SERVER...";
-    else if (st == plat::NET_ONLINE && !in.haveSnap) msg = "ENTERING THE ROOM...";
-    else if (st == plat::NET_ONLINE) { snprintf(buf, sizeof buf, "ROOM %s - %s", g_set.room, in.host ? "YOU ARE THE HOST" : "WAITING FOR THE HOST"); msg = buf; mc = rgb(140, 255, 170); }
-    else if (st == plat::NET_FAILED) { snprintf(buf, sizeof buf, "ERROR: %s", plat::netError()); msg = buf; mc = rgb(255, 130, 110); }
+    if (st == plat::NET_WIFI) msg = TR("JOINING WI-FI...");
+    else if (st == plat::NET_CONNECTING) msg = TR("CONNECTING TO THE SERVER...");
+    else if (st == plat::NET_ONLINE && !in.haveSnap) msg = TR("ENTERING THE ROOM...");
+    else if (st == plat::NET_ONLINE) { snprintf(buf, sizeof buf, "%s %s - %s", TR("ROOM"), g_set.room, in.host ? TR("YOU ARE THE HOST") : TR("WAITING FOR THE HOST")); msg = buf; mc = rgb(140, 255, 170); }
+    else if (st == plat::NET_FAILED) { snprintf(buf, sizeof buf, "%s: %s", TR("ERROR"), TR(plat::netError())); msg = buf; mc = rgb(255, 130, 110); }
     else msg = "...";
     textCentered(W / 2, 42, msg, mc, rgb(0, 0, 0));
-    if (st == plat::NET_CONNECTING && g_stateT > 6) text(W / 2 - textWidth("The free server may need a minute to wake up.") / 2, 54, "The free server may need a minute to wake up.", grey);
+    if (st == plat::NET_CONNECTING && g_stateT > 6) { const char* w = TR("The free server may need a minute to wake up."); text(W / 2 - textWidth(w) / 2, 54, w, grey); }
     if (in.haveSnap) {
-        snprintf(buf, sizeof buf, "%s  -  %d LAP%s", g_trackDefs[in.track % TRACK_COUNT].name, in.laps, in.laps > 1 ? "S" : "");
+        snprintf(buf, sizeof buf, "%s  -  %d %s", g_trackDefs[in.track % TRACK_COUNT].name, in.laps, in.laps > 1 ? TR("LAPS") : TR("LAP"));
         textCentered(W / 2, 56, buf, white, rgb(0, 0, 0));
         for (int i = 0; i < CAR_COUNT; ++i) {
             const Car& c = g_race.cars[i];
@@ -418,16 +525,16 @@ void draw_online() {
             snprintf(buf, sizeof buf, "%d", i + 1);
             text(42, y, buf, grey);
             textOutline(60, y, c.name, white, rgb(0, 0, 0));
-            const char* tag = me ? (in.host ? "YOU (HOST)" : "YOU") : (human ? "PLAYER" : "COMPUTER");
+            const char* tag = me ? (in.host ? TR("YOU (HOST)") : TR("YOU")) : (human ? TR("PLAYER") : TR("COMPUTER"));
             uint16_t tc = me ? rgb(255, 240, 120) : (human ? rgb(120, 255, 160) : rgb(130, 130, 160));
             text(150, y, tag, tc);
         }
     }
-    const char* hint = "B: LEAVE";
+    const char* hint = TR("B: LEAVE");
     if (st == plat::NET_ONLINE && in.haveSnap) {
-        if (in.phase != online::PH_LOBBY) hint = "RACE IN PROGRESS...";
-        else if (in.host) { hint = "A: START RACE   B: LEAVE"; const char* h2 = "LEFT/RIGHT: TRACK   UP/DOWN: LAPS"; text(W / 2 - textWidth(h2) / 2, 204, h2, grey); }
-        else hint = "WAITING FOR THE HOST...";
+        if (in.phase != online::PH_LOBBY) hint = TR("RACE IN PROGRESS...");
+        else if (in.host) { hint = TR("A: START RACE   B: LEAVE"); const char* h2 = TR("LEFT/RIGHT: TRACK   UP/DOWN: LAPS"); text(W / 2 - textWidth(h2) / 2, 204, h2, grey); }
+        else hint = TR("WAITING FOR THE HOST...");
     }
     text(W / 2 - textWidth(hint) / 2, 216, hint, rgb(200, 200, 230));
 }
@@ -536,6 +643,7 @@ void game_frame(const plat::Input& in, float dt) {
     g_stateT += dt;
     if (g_msgT > 0) g_msgT -= dt;
     plat::Input none;
+    i18n::setCode(plat::languageCode());
     if (g_titleRequest) {
         g_titleRequest = false;
         if (g_state != ST_TITLE) go_title();
@@ -552,12 +660,15 @@ void game_frame(const plat::Input& in, float dt) {
             if (g_menuSel == 1) g_diff = (g_diff + d + DIFF_COUNT) % DIFF_COUNT;
             if (g_menuSel == 2) g_lapsSel = (g_lapsSel + d + 4) % 4;
             if (g_menuSel == 3) { g_rec.musicOff ^= 1; apply_music_volume(); plat::saveBlob(&g_rec, sizeof g_rec); }
+            if (g_menuSel == MI_LANG) plat::setLanguageCode(i18n::code((i18n::language() + d + i18n::COUNT) % i18n::COUNT));
         }
         if (in.pressed & (plat::BTN_A | plat::BTN_RUN)) {
-            if (g_menuSel == 5 && (in.pressed & plat::BTN_A)) { go_online(); break; }
-            if (g_menuSel == 4 || (in.pressed & plat::BTN_RUN)) { start_race(); break; }
+            if (g_menuSel == MI_ONLINE && (in.pressed & plat::BTN_A)) { go_online(); break; }
+            if (g_menuSel == MI_NAME && (in.pressed & plat::BTN_A)) { open_name_editor(); break; }
+            if (g_menuSel == MI_START || (in.pressed & plat::BTN_RUN)) { start_race(); break; }
             if (g_menuSel == 3) { g_rec.musicOff ^= 1; apply_music_volume(); plat::saveBlob(&g_rec, sizeof g_rec); }
-            else g_menuSel = 4;
+            else if (g_menuSel == MI_LANG) plat::setLanguageCode(i18n::code((i18n::language() + 1) % i18n::COUNT));
+            else g_menuSel = MI_START;
             plat::playSfx(plat::SFX_MENU_MOVE);
         }
         for (float t = dt; t > 0; t -= 1.0f / 60) g_race.update(fminf(t, 1.0f / 60), none);
@@ -615,9 +726,15 @@ void game_frame(const plat::Input& in, float dt) {
         if (g_paused) draw_pause();
         break;
     }
+    case ST_NAME: {
+        update_name_editor(in);
+        for (float t = dt; t > 0; t -= 1.0f / 60) g_race.update(fminf(t, 1.0f / 60), none);
+        draw_name_editor();
+        break;
+    }
     case ST_ONLINE: {
         const online::Info& oi = online::info();
-        if (g_online) online::poll();
+        if (g_online) { online::poll(); online::applyNames(g_race); }
         if (g_online && online::isOnline() && oi.haveWelcome && oi.host && !g_cfgSent) {
             g_cfgSent = true;
             online::sendConfigure(g_track, kLaps[g_lapsSel], g_diff);
@@ -642,7 +759,7 @@ void game_frame(const plat::Input& in, float dt) {
     }
     case ST_RESULTS: {
         for (float t = dt; t > 1e-4f; t -= 1.0f / 60) g_race.update(fminf(t, 1.0f / 60), none);
-        if (g_onlineRace) { online::poll(); if (!online::isOnline()) { go_title(); break; } }
+        if (g_onlineRace) { online::poll(); online::applyNames(g_race); if (!online::isOnline()) { go_title(); break; } }
         if (g_stateT > 1.0f) {
             if (g_onlineRace) {
                 if (in.pressed & plat::BTN_A) { plat::playSfx(plat::SFX_MENU_OK); if (online::info().host) online::sendLobby(); enter_online_lobby(); break; }
@@ -658,3 +775,5 @@ void game_frame(const plat::Input& in, float dt) {
     }
     audio_update();
 }
+
+bool game_is_title() { return g_state == ST_TITLE; }

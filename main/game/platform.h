@@ -37,6 +37,10 @@ void playSfx(int id);
 void playMusic(int song, bool restart = false);   // song index (music.h), -1 = stop
 void setMusicVolume(float v);                     // 0..1
 
+// Language: two-letter code ("en" "fr" "de" "es" "it"). On the console it is the system language of the AKA menu.
+const char* languageCode();
+void        setLanguageCode(const char* code);
+
 // Network (online races). Implemented by the platform in a background task: Wi-Fi, TCP/TLS and the WebSocket
 // connection. Everything here is non blocking for the game thread.
 enum NetStatus : int { NET_OFF = 0, NET_WIFI, NET_CONNECTING, NET_ONLINE, NET_FAILED };
