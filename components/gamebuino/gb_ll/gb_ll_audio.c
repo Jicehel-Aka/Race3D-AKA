@@ -44,9 +44,9 @@ int16_t i16_fifo[ GB_AUDIO_BUFFER_SAMPLE_COUNT * GB_AUDIO_BUFFER_FIFO_COUNT];
 //uint8_t u8_fifo[1];
 uint32_t u32_idx_read = 0;
 uint32_t u32_idx_write = 0;
-uint32_t inline fifo_size() { return count_of(i16_fifo); }
-uint32_t inline fifo_used() { return u32_idx_write - u32_idx_read ; }
-uint32_t inline fifo_free() { return fifo_size() - fifo_used(); }
+static inline uint32_t fifo_size() { return count_of(i16_fifo); }
+static inline uint32_t fifo_used() { return u32_idx_write - u32_idx_read ; }
+static inline uint32_t fifo_free() { return fifo_size() - fifo_used(); }
 
 uint32_t gb_ll_audio_fifo_buffer_count() { return count_of(i16_fifo)/GB_AUDIO_BUFFER_SAMPLE_COUNT; }
 uint32_t gb_ll_audio_fifo_buffer_used() { return (u32_idx_write - u32_idx_read)/GB_AUDIO_BUFFER_SAMPLE_COUNT ; }
