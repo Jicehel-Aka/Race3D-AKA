@@ -647,24 +647,24 @@ static void make_palm() {
         if ((y % 7) == 0) for (int x = (int)(cx - hw); x <= (int)(cx + hw); ++x) c.set(x, y, V_TD);
     }
     const float tx = 62, ty = 44;
-    const float angles[] = { 175, 145, 115, 90, 62, 33, 5 };
+    const float angles[] = { 176, 148, 120, 96, 72, 46, 20, -4 };
+    // fronds: tapered, arching leaves with a bright upper edge and hanging leaflet tips; gaps between them keep the crown airy
     for (int pass = 0; pass < 2; ++pass)
-        for (float a : angles) {
-            float ar = a * 3.14159f / 180.0f;
-            float L = 46 - fabsf(90 - a) * 0.05f;
-            for (float t = 0; t <= 1.0f; t += 0.015f) {
-                float x = tx + cosf(ar) * L * t, y = ty - sinf(ar) * L * t * 0.75f + 30 * t * t;
-                float r = 5.2f * (1 - t) + 1.2f;
+        for (int k = 0; k < 8; ++k) {
+            float a = angles[k], ar = a * 3.14159f / 180.0f, sa = fabsf(sinf(ar));
+            float L = 40 + 6 * (k & 1) - fabsf(90 - a) * 0.05f, droop = 38 * (1.0f - 0.55f * sa);
+            for (float t = 0; t <= 1.0f; t += 0.02f) {
+                float x = tx + cosf(ar) * L * t, y = ty - sinf(ar) * L * t * 0.8f + droop * t * t;
+                float r = 3.4f * (1 - t) + 0.9f;
                 if (pass == 0) {
-                    // drooping leaflets underneath
-                    c.thick(x, y, x + cosf(ar) * 3, y + r * 1.9f + 2, 0.8f, V_LD);
+                    if (((int)(t * 50) % 5) == 0 && t > 0.2f) c.thick(x, y, x + cosf(ar) * 2, y + 3 + 4 * t, 1.3f, V_LM);
                 } else {
                     c.disc(x, y, r, V_LM);
-                    c.disc(x - 0.5f, y - r * 0.45f, r * 0.45f, V_LL);
+                    c.disc(x, y - r * 0.5f, r * 0.5f, V_LL);
                 }
             }
         }
-    c.disc(58, 47, 3.2f, V_ACC); c.disc(64, 48, 3.2f, V_ACC); c.disc(61, 51, 3.0f, V_ACC);
+    c.disc(58, 50, 2.6f, V_ACC); c.disc(65, 51, 2.6f, V_ACC); c.disc(61, 54, 2.4f, V_ACC);     // coconuts under the crown
     c.outline(V_OUT);
     s.worldW = 1400; s.hitW = 0.18f;
 }

@@ -420,6 +420,7 @@ void draw_layers(const Race& r, int baseY) {
 
 // ------------------------------------------------------------------ road
 float s_time = 0;
+float s_crew[2] = { 0, 0 };                 // 0 = technicians waiting in the safety strip, 1 = at the car (chassis bay, engine bay)
 
 void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg) {
     bool light = ((ps.idx / RUMBLE_LEN) & 1) == 0;
@@ -488,7 +489,7 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
             else if (ps.idx >= PIT_BAY_ENGINE0 && ps.idx <= PIT_BAY_ENGINE1) ac = pulse ? rgb(226, 56, 52) : rgb(168, 42, 46);
             span(ax0, lx0, lerp(rgb(50, 54, 68), th.fog, f));                               // technicians' strip
             span(lx0, ax1, lerp(ac, th.fog, f));
-            if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END) span(lx0 - lw, lx0 + lw, lerp(rgb(245, 205, 40), th.fog, f));
+            if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END) span(lx0 - lw, lx0 + lw, lerp((ps.idx & 1) ? rgb(245, 205, 40) : rgb(30, 30, 36), th.fog, f));     // hazard line of the safety zone
             span(ax1 - lw, ax1 + lw, lerp(rgb(245, 245, 245), th.fog, f));
             if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END)
                 span(cx + w * (PIT_WALL_X - 0.035f), cx + w * (PIT_WALL_X + 0.035f), lerp((ps.idx & 1) ? rgb(245, 245, 245) : rgb(220, 56, 48), th.fog, f));
@@ -549,27 +550,41 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
         if (((int)(s_time * 6)) & 1) rect(x + bw / 2 - 2, sy - bh - bh / 2 - 4, x + bw / 2 + 2, sy - bh - bh / 2 - 1, fogc(rgb(255, 195, 40)));
     }
     if (ps.idx == PIT_BAY_ENGINE0 + 1 || ps.idx == PIT_BAY_ENGINE1 - 1) {      // canopy posts over the engine bay
-        int x = (int)(ps.x1 + w * 2.30f), hh = (int)(w * 0.22f) + 4;
+        int x = (int)(ps.x1 + w * 2.66f), hh = (int)(w * 0.22f) + 4;
         uint16_t roof = rgb(228, 48, 48);
         rect(x, sy - hh, x + 2, sy, fogc(rgb(180, 186, 200)));
         rect(x - (int)(w * 0.9f), sy - hh - 3, x + 3, sy - hh + 1, fogc(roof));
         for (int k = x - (int)(w * 0.9f); k < x + 3; k += 8) rect(k, sy - hh - 3, k + 4, sy - hh + 1, fogc(rgb(248, 248, 252)));
     }
-    if (ps.idx == PIT_BAY_ENGINE0 + 2 || ps.idx == PIT_BAY_ENGINE0 + 6) {      // crew: two mechanics (one each side of the car) step in when the car is serviced
+    int crewBay = (ps.idx == PIT_BAY_CHASSIS0 + 2 || ps.idx == PIT_BAY_CHASSIS0 + 5) ? 0 : (ps.idx == PIT_BAY_ENGINE0 + 2 || ps.idx == PIT_BAY_ENGINE0 + 6) ? 1 : -1;
+    if (crewBay >= 0) {      // crew: technicians wait in the safety strip, run to the car when it is serviced, work on it, then walk back
         int h = (int)(w * 0.14f) + 6, mw = h * 42 / 100 + 2;
-        bool work = r.pitting && r.activeBay == 3;
-        int bob = work ? ((int)(s_time * 14) & 1) : 0;
+        float a = s_crew[crewBay], ease = a * a * (3 - 2 * a);
+        bool moving = a > 0.02f && a < 0.98f, work = a >= 0.98f;
+        int bob = work ? ((int)(s_time * 14) & 1) : 0, step = moving ? ((int)(s_time * 12) & 1) : 0;
+        float carx = fminf(2.5f, fmaxf(1.9f, r.player().x));
         for (int m = 0; m < 2; ++m) {
-            float ux = m == 0 ? (work ? 1.68f : 1.22f) : (work ? 2.10f : 2.28f);       // road half-widths
+            float idle = m == 0 ? 1.30f : 1.58f, tgt = m == 0 ? carx - 0.30f : carx + 0.30f;
+            float ux = idle + (tgt - idle) * ease;
             int mx = (int)(ps.x1 + w * ux) - mw / 2, my = sy - h + bob;
             for (int y = my; y < sy; ++y) {
                 float rel = (float)(y - my) / h;
                 uint16_t c = rel < 0.25f ? rgb(245, 245, 250) : rel < 0.68f ? rgb(230, 52, 46) : rgb(34, 38, 52);
-                for (int x = mx; x < mx + mw; ++x) px(x, y, fogc(c));
+                for (int x = mx; x < mx + mw; ++x) {
+                    if (rel >= 0.85f && moving && ((x - mx) * 2 < mw) == (step != 0) && y > sy - 2) continue;   // stride
+                    px(x, y, fogc(c));
+                }
+            }
+            if (work) {                                                                  // arm + wrench toward the car
+                int dir = m == 0 ? 1 : -1, ay = my + h * 2 / 5, ax = dir > 0 ? mx + mw : mx - 1;
+                int len = mw / 2 + 3 + bob * 2;
+                for (int k = 0; k < len; ++k) px(ax + dir * k, ay, fogc(rgb(230, 52, 46)));
+                px(ax + dir * len, ay, fogc(rgb(200, 205, 215))); px(ax + dir * len, ay - 1, fogc(rgb(200, 205, 215)));
+                if (bob && (((int)(s_time * 14)) & 2)) px(ax + dir * (len + 1), ay - 2, fogc(rgb(255, 230, 90)));   // spark
             }
         }
         if (ps.idx == PIT_BAY_ENGINE0 + 2) {                                           // lollipop man: STOP (red) / READY (amber) / GO (green)
-            int lx = (int)(ps.x1 + w * 1.30f), ly = sy - (int)(h * 1.30f), rad = mw * 3 / 4 + 2;
+            int lx = (int)(ps.x1 + w * 1.12f), ly = sy - (int)(h * 1.30f), rad = mw * 3 / 4 + 2;
             uint16_t sc = r.lollipop == 3 ? rgb(52, 242, 115) : r.lollipop == 2 ? rgb(255, 210, 48) : rgb(245, 52, 48);
             rect(lx, ly, lx + 1, sy, fogc(rgb(210, 215, 225)));
             for (int dy = -rad; dy <= rad; ++dy) for (int dx = -rad; dx <= rad; ++dx) if (dx * dx + dy * dy <= rad * rad) px(lx + dx, ly + dy, fogc(sc));
@@ -689,6 +704,13 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
 
 // =================================================================== world
 void render_world(const Race& r, float time) {
+    {   // technicians walk out of the safety strip when their bay is serving the car, and back afterwards
+        float dt = fminf(0.1f, fmaxf(0.0f, time - s_time));
+        for (int b = 0; b < 2; ++b) {
+            float tgt = (r.pitting && r.activeBay == 2 + b) ? 1.0f : 0.0f;
+            s_crew[b] += fminf(dt * 1.5f, fmaxf(-dt * 1.5f, tgt - s_crew[b]));
+        }
+    }
     s_time = time;
     const Track& tr = r.track;
     const Theme& th = g_themes[tr.theme];

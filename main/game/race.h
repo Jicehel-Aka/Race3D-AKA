@@ -17,8 +17,8 @@ inline float pitTaper(int p) {                                                  
     if (p > PIT_WALL_END) return 1.0f - (float)(p - PIT_WALL_END) / (PIT_END - PIT_WALL_END);
     return 1.0f;
 }
-constexpr float PIT_WALL_X = 1.04f, PIT_STRIP = 0.40f, PIT_LANE_X1 = 2.36f;           // wall centre / far edge of the apron (road edge = 1.0)
-inline float pitOuter(float taper) { return 1.12f + 1.34f * taper; }                // outer edge of the pit apron
+constexpr float PIT_WALL_X = 1.04f, PIT_STRIP = 0.80f, PIT_LANE_X1 = 2.62f;           // wall centre / far edge of the apron (road edge = 1.0)
+inline float pitOuter(float taper) { return 1.12f + 1.60f * taper; }                // outer edge of the pit apron
 inline float pitInner(int p) { return p < PIT_WALL_FIRST ? 1.07f : 1.05f + PIT_STRIP * pitTaper(p); }   // service lane starts behind the technicians' strip
 constexpr int   PIT_BAY_NITRO0 = 11, PIT_BAY_NITRO1 = 18;           // 1: N2O express, rolling (< 95 km/h)
 constexpr int   PIT_BAY_CHASSIS0 = 19, PIT_BAY_CHASSIS1 = 26;       // 2: tyres & tracking, slow (< 38 km/h)

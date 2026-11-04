@@ -272,7 +272,7 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     if (p.retired) p.speed -= MAX_SPEED * 0.35f * dt;          // dead engine: coast down
     if (p.speed > maxS) p.speed -= MAX_SPEED * (damage > 0.25f ? 0.25f : 0.4f) * dt;   // bleed off after nitro / damage
     if (p.speed < 0) p.speed = 0;
-    p.x = clampf(p.x, -2.6f, 2.6f);
+    p.x = clampf(p.x, -2.8f, 2.8f);
 
     float lateral = fabsf(seg.curve) * pct * pct;
     skid = clampf((lateral - 3.2f) / 2.5f, 0, 1) * (fabsf(steer) > 0.5f ? 1.0f : 0.4f);
