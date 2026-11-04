@@ -208,12 +208,22 @@ void net_task(void*) {
         if (s_wifiState != 1) { fail("WIFI: CANNOT JOIN"); break; }
 
         s_status = NET_CONNECTING;
-        if (!conn_open(conn)) { fail(s_cfg.tls ? "SERVER / TLS" : "SERVER"); break; }
         WsIO io{ &conn, conn_read, conn_write };
         char hostHdr[110];
         if ((s_cfg.tls && s_cfg.port == 443) || (!s_cfg.tls && s_cfg.port == 80)) snprintf(hostHdr, sizeof hostHdr, "%s", s_cfg.host);
         else snprintf(hostHdr, sizeof hostHdr, "%s:%u", s_cfg.host, (unsigned)s_cfg.port);
-        if (!ws_handshake(io, hostHdr, s_cfg.path, esp_random())) { fail("HANDSHAKE"); break; }
+        // the free server sleeps when idle and needs up to a minute to wake: try again a few times before giving up
+        bool linked = false;
+        const char* why = "SERVER";
+        for (int attempt = 0; attempt < 5 && !linked && !s_stop; ++attempt) {
+            if (attempt) { conn_close(conn); for (int i = 0; i < 40 && !s_stop; ++i) vTaskDelay(pdMS_TO_TICKS(50)); }
+            if (s_stop) break;
+            if (!conn_open(conn)) { why = s_cfg.tls ? "SERVER / TLS" : "SERVER"; continue; }
+            if (!ws_handshake(io, hostHdr, s_cfg.path, esp_random())) { why = "HANDSHAKE"; continue; }
+            linked = true;
+        }
+        if (s_stop) break;
+        if (!linked) { fail(why); break; }
         s_status = NET_ONLINE;
         ESP_LOGI(TAG, "online, heap %u internal %u", (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_free_internal_heap_size());
 

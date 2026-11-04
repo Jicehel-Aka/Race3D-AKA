@@ -127,42 +127,57 @@ void close_conn(Conn& k) {
     if (k.fd != SOCK_BAD) { sock_close(k.fd); k.fd = SOCK_BAD; }
 }
 
-void run() {
-    g_status = plat::NET_CONNECTING;
-    set_err("");
-    Conn k;
+// one connection attempt: TCP, TLS, WebSocket upgrade. On failure the connection is closed and `why` says where it stopped.
+bool try_connect(Conn& k, WsIO& io, const char*& why) {
     addrinfo hints{}; hints.ai_socktype = SOCK_STREAM; hints.ai_family = AF_UNSPEC;
     addrinfo* res = nullptr;
     char port[8]; snprintf(port, sizeof port, "%u", (unsigned)g_cfg.port);
-    if (getaddrinfo(g_cfg.host, port, &hints, &res) != 0 || !res) { set_err("SERVER NOT FOUND"); g_status = plat::NET_FAILED; return; }
+    if (getaddrinfo(g_cfg.host, port, &hints, &res) != 0 || !res) { why = "SERVER NOT FOUND"; return false; }
     for (addrinfo* a = res; a && k.fd == SOCK_BAD && !g_stop; a = a->ai_next) {
         sock_t s = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
         if (s == SOCK_BAD) continue;
         if (connect(s, a->ai_addr, (int)a->ai_addrlen) == 0) k.fd = s; else sock_close(s);
     }
     freeaddrinfo(res);
-    if (k.fd == SOCK_BAD) { if (!g_stop) { set_err("CANNOT REACH THE SERVER"); g_status = plat::NET_FAILED; } return; }
+    if (k.fd == SOCK_BAD) { why = "CANNOT REACH THE SERVER"; return false; }
     int one = 1; setsockopt(k.fd, IPPROTO_TCP, 1 /* TCP_NODELAY */, (const char*)&one, sizeof one);
 
     if (g_cfg.tls) {
 #ifdef HAVE_OPENSSL
         k.ctx = SSL_CTX_new(TLS_client_method());
-        if (!k.ctx || !load_roots(k.ctx)) { set_err("NO TLS CERTIFICATES"); g_status = plat::NET_FAILED; close_conn(k); return; }
+        if (!k.ctx || !load_roots(k.ctx)) { why = "NO TLS CERTIFICATES"; close_conn(k); return false; }
         SSL_CTX_set_verify(k.ctx, SSL_VERIFY_PEER, nullptr);
         k.ssl = SSL_new(k.ctx);
         SSL_set_fd(k.ssl, (int)k.fd);
         SSL_set_tlsext_host_name(k.ssl, g_cfg.host);
         SSL_set1_host(k.ssl, g_cfg.host);
-        if (SSL_connect(k.ssl) != 1) { set_err("TLS HANDSHAKE FAILED"); g_status = plat::NET_FAILED; close_conn(k); return; }
+        if (SSL_connect(k.ssl) != 1) { why = "TLS HANDSHAKE FAILED"; close_conn(k); return false; }
 #else
-        set_err("PC BUILD HAS NO TLS"); g_status = plat::NET_FAILED; close_conn(k); return;
+        why = "PC BUILD HAS NO TLS"; close_conn(k); return false;
 #endif
     }
-
-    WsIO io{&k, io_read, io_write};
     char hostHdr[128]; snprintf(hostHdr, sizeof hostHdr, "%s", g_cfg.host);
     uint32_t seed = (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count() | 1u;
-    if (!ws_handshake(io, hostHdr, g_cfg.path, seed)) { set_err("SERVER REFUSED THE CONNECTION"); g_status = plat::NET_FAILED; close_conn(k); return; }
+    io = WsIO{ &k, io_read, io_write };
+    if (!ws_handshake(io, hostHdr, g_cfg.path, seed)) { why = "SERVER REFUSED THE CONNECTION"; close_conn(k); return false; }
+    return true;
+}
+
+void run() {
+    g_status = plat::NET_CONNECTING;
+    set_err("");
+    Conn k;
+    WsIO io{ &k, io_read, io_write };
+    // the free server sleeps when idle and needs up to a minute to wake: try again a few times before giving up
+    const char* why = "CANNOT REACH THE SERVER";
+    bool linked = false;
+    for (int attempt = 0; attempt < 5 && !linked && !g_stop; ++attempt) {
+        if (attempt) for (int i = 0; i < 40 && !g_stop; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if (g_stop) break;
+        linked = try_connect(k, io, why);
+    }
+    if (!linked) { if (!g_stop) { set_err(why); g_status = plat::NET_FAILED; } return; }
+    uint32_t seed = (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count() | 1u;
     g_status = plat::NET_ONLINE;
 
     uint8_t buf[320];
