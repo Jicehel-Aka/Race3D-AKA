@@ -498,6 +498,7 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
             }
             if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END) span(lx0 - lw, lx0 + lw, lerp((ps.idx & 1) ? rgb(245, 205, 40) : rgb(30, 30, 36), th.fog, f));     // hazard line of the safety zone
             span(ax1 - lw, ax1 + lw, lerp(rgb(245, 245, 245), th.fog, f));
+            span(ax1 + lw, ax1 + w * 0.40f * taper, lerp(((ps.idx >> 2) & 1) ? rgb(120, 126, 138) : rgb(108, 114, 126), th.fog, f));   // outer walkway of the crew
             if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END)
                 span(cx + w * (PIT_WALL_X - 0.035f), cx + w * (PIT_WALL_X + 0.035f), lerp((ps.idx & 1) ? rgb(245, 245, 245) : rgb(220, 56, 48), th.fog, f));
         }
@@ -596,7 +597,7 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
         int bob = work ? ((int)(s_time * 14) & 1) : 0, step = moving ? ((int)(s_time * 12) & 1) : 0;
         float carx = fminf(2.5f, fmaxf(1.9f, r.player().x));       // they stand at the car's flanks, never in its path
         for (int m = 0; m < 2; ++m) {
-            float idle = (m == 0 ? 1.10f : 1.34f) + 0.08f * (ps.idx & 1), tgt = m == 0 ? carx - 0.32f : carx + 0.32f;
+            float idle = (m == 0 ? 1.10f : 2.82f) + 0.08f * (ps.idx & 1) * (m == 0 ? 1 : 0), tgt = m == 0 ? carx - 0.32f : carx + 0.32f;
             int cxp = (int)(ps.x1 + w * (idle + (tgt - idle) * ease));
             int dir = m == 0 ? 1 : -1;                                                   // faces the car
             // artist pictures of the crew (tech_art.cpp): idle / stride / kneeling with a wrench / carrying a tyre
