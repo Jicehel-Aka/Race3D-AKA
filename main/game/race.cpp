@@ -201,7 +201,7 @@ void Race::update(float dt, const plat::Input& in) {
 
 bool Race::inPitZone(const Car& c) const {      // on the apron (right of the pit wall) along the pit lane
     int i = pitIdx(track.indexAt(carZ(c)), track.count());
-    return i >= PIT_ENTRY && i <= PIT_END && c.x > PIT_WALL_X + 0.03f && c.x < 1.12f + 1.02f * pitTaper(i);
+    return i >= PIT_ENTRY && i <= PIT_END && c.x > pitInner(i) && c.x < pitOuter(pitTaper(i));
 }
 
 void Race::updatePlayer(float dt, const plat::Input& in) {
@@ -267,7 +267,7 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
         }
     }
     ax = fabsf(p.x);
-    if (inPitZone(p) || (ax > 1.0f && pitIdx(track.indexAt(carZ(p)), track.count()) >= PIT_ENTRY && pitIdx(track.indexAt(carZ(p)), track.count()) <= PIT_END && ax < 1.12f + 1.02f * pitTaper(pitIdx(track.indexAt(carZ(p)), track.count())))) offroad = 0;   // the apron is tarmac
+    if (inPitZone(p) || (ax > 1.0f && pitIdx(track.indexAt(carZ(p)), track.count()) >= PIT_ENTRY && pitIdx(track.indexAt(carZ(p)), track.count()) <= PIT_END && ax < pitOuter(pitTaper(pitIdx(track.indexAt(carZ(p)), track.count()))))) offroad = 0;   // the apron is tarmac
     else if (ax > 1.12f && p.speed > OFFROAD_LIMIT) p.speed -= OFFROAD_DECEL * dt;
     if (p.retired) p.speed -= MAX_SPEED * 0.35f * dt;          // dead engine: coast down
     if (p.speed > maxS) p.speed -= MAX_SPEED * (damage > 0.25f ? 0.25f : 0.4f) * dt;   // bleed off after nitro / damage

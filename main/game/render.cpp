@@ -480,13 +480,15 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
         span(r1, W, grass);
         if (!start && ps.pit >= PIT_ENTRY && ps.pit <= PIT_END) {                  // pit apron (v1.2): outside the road, behind a concrete wall
             float taper = pitTaper(ps.pit);
-            float ax0 = cx + w * 1.02f, ax1 = cx + w * (1.02f + 1.02f * taper);
+            float ax0 = cx + w * 1.02f, ax1 = cx + w * (pitOuter(taper) - 0.10f), lx0 = cx + w * (1.02f + PIT_STRIP * taper);
             bool pulse = (ps.idx + (int)(s_time * 6)) & 1;
             uint16_t ac = rgb(62, 68, 84);
             if (ps.idx >= PIT_BAY_NITRO0 && ps.idx <= PIT_BAY_NITRO1) ac = pulse ? rgb(24, 188, 232) : rgb(22, 134, 178);
             else if (ps.idx >= PIT_BAY_CHASSIS0 && ps.idx <= PIT_BAY_CHASSIS1) ac = pulse ? rgb(242, 192, 34) : rgb(192, 148, 28);
             else if (ps.idx >= PIT_BAY_ENGINE0 && ps.idx <= PIT_BAY_ENGINE1) ac = pulse ? rgb(226, 56, 52) : rgb(168, 42, 46);
-            span(ax0, ax1, lerp(ac, th.fog, f));
+            span(ax0, lx0, lerp(rgb(50, 54, 68), th.fog, f));                               // technicians' strip
+            span(lx0, ax1, lerp(ac, th.fog, f));
+            if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END) span(lx0 - lw, lx0 + lw, lerp(rgb(245, 205, 40), th.fog, f));
             span(ax1 - lw, ax1 + lw, lerp(rgb(245, 245, 245), th.fog, f));
             if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END)
                 span(cx + w * (PIT_WALL_X - 0.035f), cx + w * (PIT_WALL_X + 0.035f), lerp((ps.idx & 1) ? rgb(245, 245, 245) : rgb(220, 56, 48), th.fog, f));
@@ -539,7 +541,7 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
     auto rect = [&](int x0, int y0, int x1, int y1, uint16_t c) { for (int y = y0; y < y1; ++y) for (int x = x0; x < x1; ++x) px(x, y, c); };
     auto fogc = [&](uint16_t c) { return lerp(c, g_themes[r.track.theme].fog, ps.fog); };
     if (ps.pit == PIT_ENTRY + 1) {                          // entry board with a blinking amber beacon
-        int x = (int)(ps.x1 + w * 1.06f), bw = (int)(w * 0.20f) + 3, bh = (int)(w * 0.12f) + 3;
+        int x = (int)(ps.x1 + w * 1.52f), bw = (int)(w * 0.20f) + 3, bh = (int)(w * 0.12f) + 3;
         rect(x + bw / 2 - 1, sy - bh - bh / 2, x + bw / 2 + 1, sy, fogc(rgb(140, 145, 155)));
         rect(x, sy - bh - bh / 2, x + bw, sy - bh / 2, fogc(rgb(24, 148, 210)));
         rect(x + 1, sy - bh - bh / 2 + 1, x + bw - 1, sy - bh / 2 - bh / 3, fogc(rgb(250, 250, 250)));
@@ -547,7 +549,7 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
         if (((int)(s_time * 6)) & 1) rect(x + bw / 2 - 2, sy - bh - bh / 2 - 4, x + bw / 2 + 2, sy - bh - bh / 2 - 1, fogc(rgb(255, 195, 40)));
     }
     if (ps.idx == PIT_BAY_ENGINE0 + 1 || ps.idx == PIT_BAY_ENGINE1 - 1) {      // canopy posts over the engine bay
-        int x = (int)(ps.x1 + w * 1.98f), hh = (int)(w * 0.22f) + 4;
+        int x = (int)(ps.x1 + w * 2.30f), hh = (int)(w * 0.22f) + 4;
         uint16_t roof = rgb(228, 48, 48);
         rect(x, sy - hh, x + 2, sy, fogc(rgb(180, 186, 200)));
         rect(x - (int)(w * 0.9f), sy - hh - 3, x + 3, sy - hh + 1, fogc(roof));
@@ -558,7 +560,7 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
         bool work = r.pitting && r.activeBay == 3;
         int bob = work ? ((int)(s_time * 14) & 1) : 0;
         for (int m = 0; m < 2; ++m) {
-            float ux = m == 0 ? (work ? 1.30f : 1.14f) : (work ? 1.66f : 1.82f);       // road half-widths
+            float ux = m == 0 ? (work ? 1.68f : 1.22f) : (work ? 2.10f : 2.28f);       // road half-widths
             int mx = (int)(ps.x1 + w * ux) - mw / 2, my = sy - h + bob;
             for (int y = my; y < sy; ++y) {
                 float rel = (float)(y - my) / h;
@@ -567,7 +569,7 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
             }
         }
         if (ps.idx == PIT_BAY_ENGINE0 + 2) {                                           // lollipop man: STOP (red) / READY (amber) / GO (green)
-            int lx = (int)(ps.x1 + w * 1.08f), ly = sy - (int)(h * 1.30f), rad = mw * 3 / 4 + 2;
+            int lx = (int)(ps.x1 + w * 1.30f), ly = sy - (int)(h * 1.30f), rad = mw * 3 / 4 + 2;
             uint16_t sc = r.lollipop == 3 ? rgb(52, 242, 115) : r.lollipop == 2 ? rgb(255, 210, 48) : rgb(245, 52, 48);
             rect(lx, ly, lx + 1, sy, fogc(rgb(210, 215, 225)));
             for (int dy = -rad; dy <= rad; ++dy) for (int dx = -rad; dx <= rad; ++dx) if (dx * dx + dy * dy <= rad * rad) px(lx + dx, ly + dy, fogc(sc));
