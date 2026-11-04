@@ -498,7 +498,7 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
             }
             if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END) span(lx0 - lw, lx0 + lw, lerp((ps.idx & 1) ? rgb(245, 205, 40) : rgb(30, 30, 36), th.fog, f));     // hazard line of the safety zone
             span(ax1 - lw, ax1 + lw, lerp(rgb(245, 245, 245), th.fog, f));
-            span(ax1 + lw, ax1 + w * 0.40f * taper, lerp(((ps.idx >> 2) & 1) ? rgb(120, 126, 138) : rgb(108, 114, 126), th.fog, f));   // outer walkway of the crew
+            span(ax1 + lw, ax1 + w * 0.34f * taper, lerp(((ps.idx >> 2) & 1) ? rgb(120, 126, 138) : rgb(108, 114, 126), th.fog, f));   // outer walkway of the crew
             if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END)
                 span(cx + w * (PIT_WALL_X - 0.035f), cx + w * (PIT_WALL_X + 0.035f), lerp((ps.idx & 1) ? rgb(245, 245, 245) : rgb(220, 56, 48), th.fog, f));
         }
@@ -597,11 +597,16 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
         int bob = work ? ((int)(s_time * 14) & 1) : 0, step = moving ? ((int)(s_time * 12) & 1) : 0;
         float carx = fminf(2.5f, fmaxf(1.9f, r.player().x));       // they stand at the car's flanks, never in its path
         for (int m = 0; m < 2; ++m) {
-            float idle = (m == 0 ? 1.10f : 2.82f) + 0.08f * (ps.idx & 1) * (m == 0 ? 1 : 0), tgt = m == 0 ? carx - 0.32f : carx + 0.32f;
-            int cxp = (int)(ps.x1 + w * (idle + (tgt - idle) * ease));
+            float idle = (m == 0 ? 1.10f : 2.70f) + 0.08f * (ps.idx & 1) * (m == 0 ? 1 : 0), tgt = m == 0 ? carx - 0.32f : carx + 0.32f;
+            // waiting crew is never frozen: they pace a little, turn round, now and then raise an arm
+            float ph = s_time * 0.9f + ps.idx * 1.7f + m * 2.3f;
+            float pace = (1.0f - ease) * 0.08f * sinf(ph), pv = cosf(ph);
+            bool pacing = ease < 0.01f && fabsf(pv) > 0.45f;
+            int cxp = (int)(ps.x1 + w * (idle + (tgt - idle) * ease + pace));
             int dir = m == 0 ? 1 : -1;                                                   // faces the car
+            if (ease < 0.01f && pacing) dir = pv > 0 ? 1 : -1;                           // turns the way he walks
             // artist pictures of the crew (tech_art.cpp): idle / stride / kneeling with a wrench / carrying a tyre
-            int fr = work ? TECH_WORK : (m == 1 && a > 0.02f && a < 0.5f) ? TECH_TYRE : moving ? (step ? TECH_WALK_A : TECH_WALK_B) : TECH_IDLE;
+            int fr = work ? TECH_WORK : (m == 1 && a > 0.02f && a < 0.5f) ? TECH_TYRE : (moving || pacing) ? (((int)(s_time * 6 + ps.idx) & 1) ? TECH_WALK_A : TECH_WALK_B) : (ease < 0.01f && fmodf(s_time * 0.35f + ps.idx * 0.9f + m * 0.5f, 4.0f) < 0.35f) ? TECH_RAISED : TECH_IDLE;
             int dh = (int)(w * 0.20f) + 9, dw = dh * TECH_W / TECH_H;
             int bx = cxp - dw / 2, by = sy - dh + (work ? 0 : bob);
             const Sprite& sp = g_sprites[SPR_TECH0 + fr];
