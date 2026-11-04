@@ -12,8 +12,11 @@ from PIL import Image
 def main(src, outdir, target_h=46):
     a = np.array(Image.open(src).convert('RGB')).astype(int)
     key = (a[:, :, 0] > 150) & (a[:, :, 1] < 110) & (a[:, :, 2] > 150) & (abs(a[:, :, 0] - a[:, :, 2]) < 90)
+    # dark magenta halo / shadow left under the boots by the generator: also treated as background
+    key |= (a[:, :, 0] > 95) & (a[:, :, 1] < 45) & (a[:, :, 2] > 95) & (abs(a[:, :, 0] - a[:, :, 2]) < 75)
     alpha = np.where(key, 0, 255).astype(np.uint8)
-    full = Image.fromarray(np.dstack([a.astype(np.uint8), alpha]), 'RGBA')
+    rgb_clean = np.where(key[..., None], 0, a).astype(np.uint8)       # no #FF00FF mixed into the box filter
+    full = Image.fromarray(np.dstack([rgb_clean, alpha]), 'RGBA')
     cols = (alpha > 0).any(axis=0)
     segs, st = [], None
     for x, v in enumerate(cols):

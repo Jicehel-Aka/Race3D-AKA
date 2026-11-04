@@ -110,6 +110,10 @@ public:
     int   activeBay = 0;                   // 0 none, 1 N2O, 2 tyres & tracking, 3 engine garage
     int   lollipop = 0;                    // 0 hidden, 1 STOP, 2 READY, 3 GO
     float lollipopT = 0, launchBoostT = 0;
+    // pit crews of the two serviced bays (0 = tyres & tracking, 1 = engine garage): wait outside, walk to the stopped car, work, walk away
+    enum CrewPhase : uint8_t { CREW_IDLE, CREW_IN, CREW_WORK, CREW_OUT };
+    struct Crew { CrewPhase phase = CREW_IDLE; float progress = 0, workT = 0, workReq = 2, anchorZ = 0, anchorX = 2.1f, startDamage = 0, startNitro = 1; bool serviced = false; };
+    Crew  crew[2];
     bool  onApron = false;                 // player is on the pit apron (speed limiter, no grass penalty)
     bool  inPitZone(const Car& c) const;
     int   pullDir = 1;

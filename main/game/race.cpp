@@ -73,7 +73,7 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
     nitro = 1.0f; nitroOn = false; steer = 0;
     skyOffset = nearOffset = 0; shake = 0; offroad = skid = 0;
     gear = 1; rpm = 0;
-    pitting = false; pitT = 0; activeBay = 0; lollipop = 0; lollipopT = 0; launchBoostT = 0; onApron = false; damage = 0; perf = 1; sputter = 0; sputterNext = 2; damageCool = 0; smokeT = 0; spinT = 0;
+    pitting = false; pitT = 0; activeBay = 0; lollipop = 0; lollipopT = 0; launchBoostT = 0; crew[0] = Crew(); crew[1] = Crew(); onApron = false; damage = 0; perf = 1; sputter = 0; sputterNext = 2; damageCool = 0; smokeT = 0; spinT = 0;
     const DiffProfile& d = kDiff[diff];
 
     // AI drivers: random strengths, strongest on pole
@@ -143,36 +143,60 @@ void Race::update(float dt, const plat::Input& in) {
         bool ok = !autopilot && !demo && started && !p.retired && inPitZone(p);
         if (!ok) {
             if (activeBay || pitting) { pitting = false; activeBay = 0; }
+            for (auto& cr : crew) { if (cr.phase == CREW_IN || cr.phase == CREW_WORK) cr.phase = CREW_OUT; cr.serviced = false; }
             if (lollipop && !inPitZone(p)) lollipop = 0;
         } else {
             if (lollipopT > 0) { lollipopT -= dt; if (lollipopT <= 0 && lollipop == 3) lollipop = 0; }
             if (lollipop == 3 && lollipopT > 0 && pidx > PIT_BAY_ENGINE1 && (in.held & plat::BTN_A)) {     // GO! : launch boost
                 launchBoostT = 1.35f; lollipopT = 0; lollipop = 0; plat::playSfx(plat::SFX_NITRO);
             }
-            bool was = pitting;
             pitting = false;
+            int cb = (pidx >= PIT_BAY_CHASSIS0 && pidx <= PIT_BAY_CHASSIS1) ? 0 : (pidx >= PIT_BAY_ENGINE0 && pidx <= PIT_BAY_ENGINE1) ? 1 : -1;
+            if (cb >= 0) {                                                            // the other crew steps back at once
+                Crew& other = crew[1 - cb];
+                if (other.phase == CREW_IN || other.phase == CREW_WORK) other.phase = CREW_OUT;
+                other.serviced = false;
+            }
             if (pidx >= PIT_BAY_NITRO0 && pidx <= PIT_BAY_NITRO1) {                  // 1: N2O EXPRESS, no need to stop
                 activeBay = 1;
                 if (kmh <= 95.0f && nitro < 1.0f) { pitting = true; nitro = fminf(1.0f, nitro + dt * 1.35f); }
-            } else if (pidx >= PIT_BAY_CHASSIS0 && pidx <= PIT_BAY_CHASSIS1) {      // 2: TYRES & TRACKING: no more pull, half of the damage repaired
-                activeBay = 2;
-                if (kmh <= 38.0f && damage > 0.30f) {
-                    pitting = true; lollipop = 1;
-                    damage = fmaxf(0.30f, damage - kRepair[difficulty] * 1.3f * dt);
-                    if (damage <= 0.30f) { pullDir = 0; lollipop = 2; ev.pitDone = true; }
-                }
-            } else if (pidx >= PIT_BAY_ENGINE0 && pidx <= PIT_BAY_ENGINE1) {        // 3: ENGINE GARAGE: everything back to new
-                activeBay = 3;
-                if (kmh <= 30.0f && (damage > 0.0f || nitro < 0.99f)) {
-                    if (!was) { pitT = 0; if (damage > 0.02f) ev.pitStart = true; }
-                    pitting = true; pitT += dt;
-                    nitro = fminf(1.0f, nitro + dt * 0.65f);
-                    if (damage > 0) damage = fmaxf(0.0f, damage - kRepair[difficulty] * dt);
-                    lollipop = damage < 0.08f ? 2 : 1;
-                    if (damage <= 0.0f && nitro >= 0.99f) { pullDir = 0; lollipop = 3; lollipopT = 2.4f; ev.pitDone = true; }
+            } else if (cb >= 0) {                                                    // 2: TYRES & TRACKING / 3: ENGINE GARAGE: the crew works on the STOPPED car
+                activeBay = 2 + cb;
+                Crew& cr = crew[cb];
+                bool needs = cb == 0 ? damage > 0.30f : (damage > 0.0f || nitro < 0.99f);
+                if (kmh > 7.0f) {                                                    // the car moves again: abort, the crew walks away
+                    if (cr.phase == CREW_IN || cr.phase == CREW_WORK) cr.phase = CREW_OUT;
+                    cr.serviced = false;
+                    if (lollipop == 1 || lollipop == 2) lollipop = 0;
+                } else if (kmh < 4.0f && needs && !cr.serviced) {
+                    if (cr.phase == CREW_IDLE || cr.phase == CREW_OUT) {
+                        cr.anchorZ = carZ(p); cr.anchorX = clampf(p.x, 1.84f, 2.34f);
+                        cr.workT = 0; cr.startDamage = damage; cr.startNitro = nitro;
+                        float need = cb == 0 ? (damage - 0.30f) / (kRepair[difficulty] * 1.3f) : fmaxf(damage / kRepair[difficulty], (1.0f - nitro) / 0.65f);
+                        cr.workReq = fmaxf(cb == 0 ? 1.6f : 2.0f, need);
+                        cr.phase = CREW_IN; pitT = 0;
+                        if (cb == 1 && damage > 0.02f) ev.pitStart = true;
+                    }
+                    pitting = true; pitT += dt; lollipop = 1;
+                    if (cr.phase == CREW_WORK) {                                     // the technicians are beside the car: real work, spread over workReq
+                        cr.workT += dt;
+                        float f = fminf(1.0f, cr.workT / cr.workReq);
+                        if (cb == 0) damage = cr.startDamage + (fminf(cr.startDamage, 0.30f) - cr.startDamage) * f;
+                        else { damage = cr.startDamage * (1.0f - f); nitro = cr.startNitro + (1.0f - cr.startNitro) * f; }
+                        lollipop = cr.workReq - cr.workT < 0.4f ? 2 : 1;
+                        if (cr.workT >= cr.workReq) {                                // done: everybody walks away at once, GO!
+                            if (cb == 0) damage = fminf(damage, 0.30f); else { damage = 0; nitro = 1; }
+                            pullDir = 0; cr.serviced = true; cr.phase = CREW_OUT; pitting = false;
+                            lollipop = 3; lollipopT = 2.4f; ev.pitDone = true;
+                        }
+                    }
                 }
             } else activeBay = 0;
         }
+    }
+    for (auto& cr : crew) {                                                       // walking speed of the crews (they cross the lane in ~0.85 s)
+        if (cr.phase == CREW_IN) { cr.progress += dt * 1.18f; if (cr.progress >= 1.0f) { cr.progress = 1.0f; cr.phase = CREW_WORK; } }
+        else if (cr.phase == CREW_OUT) { cr.progress -= dt * 1.32f; if (cr.progress <= 0.0f) { cr.progress = 0.0f; cr.phase = CREW_IDLE; } }
     }
     for (auto& c : cars) laps_(c);
     ranking();

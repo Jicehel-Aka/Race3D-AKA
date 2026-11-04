@@ -590,7 +590,7 @@ void handle_events() {
         if (g_race.onApron && !wasApron) message("PIT LANE - 85 KM/H", rgb(130, 210, 255), rgb(20, 90, 170), 1.4f);
         if (g_race.activeBay != lastBay) {
             if (g_race.activeBay == 1) message("N2O EXPRESS", rgb(120, 235, 255), rgb(20, 120, 160), 1.1f);
-            else if (g_race.activeBay == 2) message("TYRES - SLOW DOWN", rgb(255, 225, 110), rgb(170, 120, 10), 1.3f);
+            else if (g_race.activeBay == 2) message("TYRES - STOP", rgb(255, 225, 110), rgb(170, 120, 10), 1.3f);
             else if (g_race.activeBay == 3) message("ENGINE GARAGE - STOP", rgb(255, 130, 110), rgb(170, 30, 20), 1.3f);
         }
         if (g_race.lollipop == 3 && lastLol != 3) message("GO! GO! GO!", rgb(150, 255, 170), rgb(20, 150, 60), 1.5f);
