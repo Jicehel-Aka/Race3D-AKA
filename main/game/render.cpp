@@ -2,6 +2,7 @@
 #include "render.h"
 #include "i18n.h"
 #include "car_art.h"
+#include "tech_art.h"
 #include "gfx.h"
 #include "platform.h"
 #include <math.h>
@@ -579,10 +580,15 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
             uint16_t sc = r.lollipop == 3 ? rgb(52, 242, 115) : r.lollipop == 2 ? rgb(255, 210, 48) : rgb(245, 52, 48);
             rect(lx, ly, lx + 1, sy, fogc(rgb(210, 215, 225)));
             for (int dy = -rad; dy <= rad; ++dy) for (int dx = -rad; dx <= rad; ++dx) if (dx * dx + dy * dy <= rad * rad) px(lx + dx, ly + dy, fogc(sc));
+            {   // the lollipop man himself, arm raised, holding the sign
+                int dh = (int)(w * 0.20f) + 9, dw = dh * TECH_W / TECH_H;
+                const Sprite& sp = g_sprites[SPR_TECH5];
+                const uint16_t* tp = lit_palette(sprite_palette(SPR_TECH5, r.track.theme), 0, g_themes[r.track.theme].ambient, g_themes[r.track.theme].fog, ps.fog);
+                blit(sp, tp, lx - dw / 2 - 1, sy - dh, dw, dh, ps.clip, false);
+            }
         }
     }
     if (crewBay >= 0) {      // crew: technicians wait in the safety strip, run to the car when it is serviced, work on it, then walk back
-        int h = (int)(w * 0.14f) + 6, mw = h * 42 / 100 + 2;
         float a = s_crew[crewBay], ease = a * a * (3 - 2 * a);
         bool moving = a > 0.02f && a < 0.98f, work = a >= 0.98f;
         int bob = work ? ((int)(s_time * 14) & 1) : 0, step = moving ? ((int)(s_time * 12) & 1) : 0;
@@ -591,39 +597,14 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
             float idle = (m == 0 ? 1.22f : 1.50f) + 0.10f * (ps.idx & 1), tgt = m == 0 ? carx - 0.30f : carx + 0.30f;
             int cxp = (int)(ps.x1 + w * (idle + (tgt - idle) * ease));
             int dir = m == 0 ? 1 : -1;                                                   // faces the car
-            // figure: white helmet with visor, red overalls with a white band, gloves, dark trousers, black boots
-            int th2 = (int)(w * 0.18f) + 7, hw = th2 * 20 / 100 + 1;
-            int hh = work ? th2 * 78 / 100 : th2, top = sy - hh + bob;
-            int tTop = top + hh * 25 / 100, lTop = top + hh * 60 / 100, boot = sy - (hh >= 14 ? 2 : 1);
-            const uint16_t RED = rgb(226, 48, 44), RED2 = rgb(170, 34, 34), WHT = rgb(246, 246, 250), SKIN = rgb(232, 178, 140), TRS = rgb(36, 42, 66);
-            int stepA = moving ? (step ? 2 : 0) : 0, stepB = moving ? (step ? 0 : 2) : 0;
-            for (int y = lTop; y < sy; ++y) {                                            // legs (strided when walking)
-                if (y < sy - stepA) for (int x = cxp - hw; x <= cxp - 1; ++x) px(x, y, fogc(y >= boot ? rgb(14, 14, 18) : TRS));
-                if (y < sy - stepB) for (int x = cxp + 1; x <= cxp + hw; ++x) px(x, y, fogc(y >= boot ? rgb(14, 14, 18) : TRS));
-            }
-            for (int y = tTop; y < lTop; ++y) for (int x = cxp - hw; x <= cxp + hw; ++x)  // torso
-                px(x, y, fogc((y == (tTop + lTop) / 2 && hh >= 14) ? WHT : (x == cxp + hw * dir ? RED2 : RED)));
-            for (int y = top; y < tTop; ++y) for (int x = cxp - hw + 1; x <= cxp + hw - 1; ++x) {   // helmet + face
-                bool visor = y >= top + (tTop - top) / 3 && y < top + (tTop - top) * 2 / 3 + 1 && (x - cxp) * dir >= 0;
-                px(x, y, fogc(visor ? rgb(20, 24, 36) : (y >= tTop - 1 && hh >= 14 ? SKIN : WHT)));
-            }
-            int aY = tTop + 1, aL = (lTop - tTop) * 3 / 4;
-            if (work) {                                                                  // arm stretched to the wheel with a wrench, sparks flying
-                int len = hw + 3 + th2 / 6 + bob * 2, ay = tTop + (lTop - tTop) / 3;
-                for (int k = hw; k < len; ++k) px(cxp + dir * k, ay, fogc(RED));
-                px(cxp + dir * len, ay, fogc(WHT)); px(cxp + dir * (len + 1), ay - 1, fogc(rgb(205, 210, 220))); px(cxp + dir * (len + 1), ay + 1, fogc(rgb(205, 210, 220)));
-                for (int y = aY; y < aY + aL; ++y) px(cxp - dir * (hw + 1), y, fogc(RED));
-                if (bob) px(cxp + dir * (len + 2), ay - 2, fogc(rgb(255, 230, 90)));
-                if (((int)(s_time * 14)) & 2) px(cxp + dir * (len + 3), ay + 2, fogc(rgb(255, 150, 40)));
-            } else {                                                                     // arms hanging / swinging
-                int sw = moving ? (step ? 1 : -1) : 0;
-                for (int y = aY; y < aY + aL; ++y) { px(cxp - hw - 1, y + sw, fogc(RED)); px(cxp + hw + 1, y - sw, fogc(RED)); }
-                px(cxp - hw - 1, aY + aL + sw, fogc(WHT)); px(cxp + hw + 1, aY + aL - sw, fogc(WHT));
-                if (m == 1 && a > 0.02f && a < 0.5f) {                                   // carries a spare tyre on the way out
-                    int rad = th2 / 5 + 2, tx = cxp + dir * (hw + rad + 1), ty = lTop + 1;
-                    for (int dy = -rad; dy <= rad; ++dy) for (int dx = -rad; dx <= rad; ++dx) { int d2 = dx * dx + dy * dy; if (d2 <= rad * rad) px(tx + dx, ty + dy, fogc(d2 <= (rad / 2) * (rad / 2) ? rgb(170, 175, 188) : rgb(22, 22, 26))); }
-                }
-            }
+            // artist pictures of the crew (tech_art.cpp): idle / stride / kneeling with a wrench / carrying a tyre
+            int fr = work ? TECH_WORK : (m == 1 && a > 0.02f && a < 0.5f) ? TECH_TYRE : moving ? (step ? TECH_WALK_A : TECH_WALK_B) : TECH_IDLE;
+            int dh = (int)(w * 0.20f) + 9, dw = dh * TECH_W / TECH_H;
+            int bx = cxp - dw / 2, by = sy - dh + (work ? 0 : bob);
+            const Sprite& sp = g_sprites[SPR_TECH0 + fr];
+            const uint16_t* tp = lit_palette(sprite_palette(SPR_TECH0 + fr, r.track.theme), 0, g_themes[r.track.theme].ambient, g_themes[r.track.theme].fog, ps.fog);
+            blit(sp, tp, bx, by, dw, dh, ps.clip, dir < 0);
+            if (work && bob) { int ex = cxp + dir * (dw / 2 + 1), ey = sy - dh * 2 / 5; px(ex, ey, fogc(rgb(255, 230, 90))); px(ex + dir, ey - 1, fogc(rgb(255, 150, 40))); }
         }
     }
 }

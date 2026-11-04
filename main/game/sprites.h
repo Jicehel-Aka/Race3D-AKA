@@ -17,6 +17,7 @@ enum SpriteId : uint8_t {
     // roadside dressing
     SPR_CRATES, SPR_BARRIER, SPR_DUNEGRASS, SPR_FENCE, SPR_HAYBALE, SPR_FLOWERS, SPR_POLE,
     SPR_CAR_LEFT3Q, SPR_CAR_RIGHT3Q,   // three-quarter rear views (strong turns, spin-outs)
+    SPR_TECH0, SPR_TECH1, SPR_TECH2, SPR_TECH3, SPR_TECH4, SPR_TECH5,   // pit crew technician frames (tech_art.h)
     SPR_COUNT
 };
 

@@ -4,6 +4,7 @@
 #include "gfx.h"
 #include "platform.h"
 #include "car_shadow_art.h"
+#include "tech_art.h"
 #include "font8x8.h"
 #include <math.h>
 #include <string.h>
@@ -1306,6 +1307,10 @@ void sprites_init() {
     make_haybale();
     make_flowers();
     make_pole();
+    for (int f = 0; f < TECH_FRAMES; ++f) {            // pit crew pictures live in flash, read-only
+        Sprite& s = g_sprites[SPR_TECH0 + f];
+        s.w = TECH_W; s.h = TECH_H; s.px = const_cast<uint8_t*>(kTechPx[f]); s.worldW = 120; s.hitW = 0;
+    }
 }
 
 // ------------------------------------------------------------------ palettes
@@ -1320,6 +1325,7 @@ static void set_pal(int id, int theme, std::initializer_list<uint16_t> v) {
 }
 
 static void build_palettes() {
+    for (int f = 0; f < TECH_FRAMES; ++f) for (int t = 0; t < PAL_THEMES; ++t) for (int k = 0; k < 16; ++k) s_pal[SPR_TECH0 + f][t][k] = kTechPal[k];
     const uint16_t O = rgb(18, 14, 22);
     for (int t = 0; t < 3; ++t) {
         // vegetation per theme: coast (lush, warm), alpine (cold, snowy), city (night-blue)
