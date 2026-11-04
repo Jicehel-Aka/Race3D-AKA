@@ -617,7 +617,9 @@ void draw_car(const Race& r, const Car& c, int x, int y, int dw, int dh, int cli
         else if (c.isPlayer && r.spinT > 0 && r.spinDir != 0) { stage = CAR_ART_MID + 1; flip = r.spinDir > 0; }
         else {
             static const float kStep[CAR_ART_MID + 1] = { 0.09f, 0.22f, 0.35f, 0.49f, 0.63f, 0.78f };   // regular angular steps of the rigid rotation
-            float a = fabsf(sv);
+            // the body only reaches the strongest angle when turning hard AND fast; slow or gentle turns stay on a middle picture
+            float pct = c.speed / MAX_SPEED; if (pct > 1) pct = 1; if (pct < 0) pct = 0;
+            float a = fabsf(sv) * (0.22f + 0.78f * pct * pct);
             stage = 0;
             while (stage <= CAR_ART_MID && a >= kStep[stage]) ++stage;
             flip = sv > 0;
