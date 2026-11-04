@@ -1,6 +1,7 @@
 // track.cpp - the circuits, their scenery and backdrops.
 #include "track.h"
 #include "sprites.h"
+#include "race.h"
 #include "gfx.h"
 #include <math.h>
 #include <algorithm>
@@ -463,6 +464,10 @@ void scenery(Track& t, int id) {
     }
     Rng r2(g_trackDefs[id].seed ^ 0x5bd1e995u);
     for (int i = 20; i < n - 4; ++i) dressing(t, P, r2, i, n, maxY);
+    P.erase(std::remove_if(P.begin(), P.end(), [&](const Prop& pr) {          // keep the pit complex (apron, safety strip, bays) clear of scenery
+        int pi = pitIdx(pr.seg, n);
+        return pi >= PIT_ENTRY - 2 && pi <= PIT_END + 2 && pr.offset > 0.9f && pr.offset < 3.2f;
+    }), P.end());
     std::stable_sort(P.begin(), P.end(), [](const Prop& a, const Prop& b) { return a.seg < b.seg; });
     for (size_t k = 0; k < P.size(); ++k) {
         Seg& s = t.segs[P[k].seg];
