@@ -589,12 +589,14 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
         }
     }
     if (crewBay >= 0) {      // crew: technicians wait in the safety strip, run to the car when it is serviced, work on it, then walk back
-        float a = s_crew[crewBay], ease = a * a * (3 - 2 * a);
+        int carSeg = r.track.indexAt(r.carZ(r.player()));
+        bool near = abs(ps.idx - carSeg) <= 2;                                 // only the crew right next to the stopped car goes to it
+        float a = near ? s_crew[crewBay] : 0.0f, ease = a * a * (3 - 2 * a);
         bool moving = a > 0.02f && a < 0.98f, work = a >= 0.98f;
         int bob = work ? ((int)(s_time * 14) & 1) : 0, step = moving ? ((int)(s_time * 12) & 1) : 0;
-        float carx = fminf(2.5f, fmaxf(1.9f, r.player().x));
+        float carx = fminf(2.5f, fmaxf(1.9f, r.player().x));       // they stand at the car's flanks, never in its path
         for (int m = 0; m < 2; ++m) {
-            float idle = (m == 0 ? 1.22f : 1.50f) + 0.10f * (ps.idx & 1), tgt = m == 0 ? carx - 0.30f : carx + 0.30f;
+            float idle = (m == 0 ? 1.10f : 1.34f) + 0.08f * (ps.idx & 1), tgt = m == 0 ? carx - 0.32f : carx + 0.32f;
             int cxp = (int)(ps.x1 + w * (idle + (tgt - idle) * ease));
             int dir = m == 0 ? 1 : -1;                                                   // faces the car
             // artist pictures of the crew (tech_art.cpp): idle / stride / kneeling with a wrench / carrying a tyre
@@ -724,8 +726,8 @@ void render_world(const Race& r, float time) {
     {   // technicians walk out of the safety strip when their bay is serving the car, and back afterwards
         float dt = fminf(0.1f, fmaxf(0.0f, time - s_time));
         for (int b = 0; b < 2; ++b) {
-            float tgt = (r.pitting && r.activeBay == 2 + b) ? 1.0f : 0.0f;
-            s_crew[b] += fminf(dt * 1.5f, fmaxf(-dt * 1.5f, tgt - s_crew[b]));
+            float tgt = (r.pitting && r.activeBay == 2 + b && r.speedKmh() < 4.0f) ? 1.0f : 0.0f;     // they only step in once the car has stopped
+            s_crew[b] += fminf(dt * (tgt > s_crew[b] ? 1.5f : 3.0f), fmaxf(-dt * 3.0f, tgt - s_crew[b]));
         }
     }
     s_time = time;
