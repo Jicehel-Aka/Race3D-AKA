@@ -20,6 +20,7 @@ struct PSeg {
     float x2, y2, w2, s2;   // far edge
     int clip;               // rows >= clip are hidden by nearer road (for sprites)
     int fog;                // 0..256
+    int pit;                // pitIdx of the segment (negative on the last segments of the lap)
     int idx;
     bool valid;
 };
@@ -477,10 +478,8 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
         }
         span(r0, r1, rumble);
         span(r1, W, grass);
-        if (!start && ps.idx >= PIT_ENTRY && ps.idx <= PIT_END) {                  // pit apron (v1.2): outside the road, behind a concrete wall
-            float taper = 1.0f;
-            if (ps.idx < PIT_WALL_FIRST) taper = (float)(ps.idx - PIT_ENTRY) / (PIT_WALL_FIRST - PIT_ENTRY);
-            else if (ps.idx > PIT_WALL_END) taper = 1.0f - (float)(ps.idx - PIT_WALL_END) / (PIT_END - PIT_WALL_END);
+        if (!start && ps.pit >= PIT_ENTRY && ps.pit <= PIT_END) {                  // pit apron (v1.2): outside the road, behind a concrete wall
+            float taper = pitTaper(ps.pit);
             float ax0 = cx + w * 1.02f, ax1 = cx + w * (1.02f + 1.02f * taper);
             bool pulse = (ps.idx + (int)(s_time * 6)) & 1;
             uint16_t ac = rgb(62, 68, 84);
@@ -489,7 +488,7 @@ void draw_segment_rows(const PSeg& ps, int maxy, const Theme& th, const Seg& sg)
             else if (ps.idx >= PIT_BAY_ENGINE0 && ps.idx <= PIT_BAY_ENGINE1) ac = pulse ? rgb(226, 56, 52) : rgb(168, 42, 46);
             span(ax0, ax1, lerp(ac, th.fog, f));
             span(ax1 - lw, ax1 + lw, lerp(rgb(245, 245, 245), th.fog, f));
-            if (ps.idx >= PIT_WALL_FIRST && ps.idx <= PIT_WALL_END)
+            if (ps.pit >= PIT_WALL_FIRST && ps.pit <= PIT_WALL_END)
                 span(cx + w * (PIT_WALL_X - 0.035f), cx + w * (PIT_WALL_X + 0.035f), lerp((ps.idx & 1) ? rgb(245, 245, 245) : rgb(220, 56, 48), th.fog, f));
         }
         // ground texture: world-fixed dashes (tufts, ripples, wind streaks, cracks, glints)
@@ -539,7 +538,7 @@ void draw_pit_scenery(const Race& r, const PSeg& ps) {
     auto px = [&](int x, int y, uint16_t c) { if (x >= 0 && x < W && y >= 0 && y < ps.clip) fb[y * W + x] = c; };
     auto rect = [&](int x0, int y0, int x1, int y1, uint16_t c) { for (int y = y0; y < y1; ++y) for (int x = x0; x < x1; ++x) px(x, y, c); };
     auto fogc = [&](uint16_t c) { return lerp(c, g_themes[r.track.theme].fog, ps.fog); };
-    if (ps.idx == PIT_ENTRY + 1) {                          // entry board with a blinking amber beacon
+    if (ps.pit == PIT_ENTRY + 1) {                          // entry board with a blinking amber beacon
         int x = (int)(ps.x1 + w * 1.06f), bw = (int)(w * 0.20f) + 3, bh = (int)(w * 0.12f) + 3;
         rect(x + bw / 2 - 1, sy - bh - bh / 2, x + bw / 2 + 1, sy, fogc(rgb(140, 145, 155)));
         rect(x, sy - bh - bh / 2, x + bw, sy - bh / 2, fogc(rgb(24, 148, 210)));
@@ -723,6 +722,7 @@ void render_world(const Race& r, float time) {
         const Seg& sg = tr.segs[i];
         PSeg& ps = s_ps[n];
         ps.idx = i;
+        ps.pit = pitIdx(i, N);
         ps.clip = maxy;
         float d = (float)n / DRAW_DIST;
         ps.fog = (int)((1.0f - 1.0f / expf(d * d * th.fogDensity)) * 256);
@@ -755,7 +755,7 @@ void render_world(const Race& r, float time) {
         if (!ps.valid) continue;
         const Seg& sg = tr.segs[ps.idx];
         for (int j = 0; j < sg.propCount; ++j) draw_prop(r, ps, tr.props[sg.propFirst + j]);
-        if (ps.idx >= PIT_ENTRY && ps.idx <= PIT_END) draw_pit_scenery(r, ps);
+        if (ps.pit >= PIT_ENTRY && ps.pit <= PIT_END) draw_pit_scenery(r, ps);
         for (int k = 0; k < CAR_COUNT; ++k) {
             const Car& c = r.cars[k];
             if (&c == &pl) continue;

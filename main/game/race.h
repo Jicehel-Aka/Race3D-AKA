@@ -8,7 +8,15 @@
 constexpr int   CAR_COUNT = 8;
 constexpr float MAX_SPEED = SEG_LEN * 60.0f;     // 12000 units/s ~ 240 km/h
 // pit lane v1.2: separate apron on the right of the road, behind a concrete wall, three bays (segment indices)
-constexpr int   PIT_ENTRY = 3, PIT_WALL_FIRST = 10, PIT_WALL_END = 38, PIT_END = 44;
+// The apron starts BEFORE the start line (PIT_PRE segments at the end of the lap, numbered -PIT_PRE..-1 by pitIdx) and the wall begins
+// only at the second bay, so there is a long open entry (about 30 segments) to slip into the pit lane.
+constexpr int   PIT_PRE = 12, PIT_ENTRY = -PIT_PRE, PIT_WALL_FIRST = 19, PIT_WALL_END = 38, PIT_END = 44;
+inline int pitIdx(int idx, int n) { return idx >= n - PIT_PRE ? idx - n : idx; }      // segment index as seen by the pit lane
+inline float pitTaper(int p) {                                                        // 0 where the apron starts .. 1 at full width
+    if (p < PIT_WALL_FIRST) return (float)(p - PIT_ENTRY) / (PIT_WALL_FIRST - PIT_ENTRY);
+    if (p > PIT_WALL_END) return 1.0f - (float)(p - PIT_WALL_END) / (PIT_END - PIT_WALL_END);
+    return 1.0f;
+}
 constexpr float PIT_WALL_X = 1.04f, PIT_LANE_X1 = 1.96f;           // wall centre / far edge of the apron (road edge = 1.0)
 constexpr int   PIT_BAY_NITRO0 = 11, PIT_BAY_NITRO1 = 18;           // 1: N2O express, rolling (< 95 km/h)
 constexpr int   PIT_BAY_CHASSIS0 = 19, PIT_BAY_CHASSIS1 = 26;       // 2: tyres & tracking, slow (< 38 km/h)
