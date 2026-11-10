@@ -122,3 +122,7 @@ Records and settings are saved next to the exe (`race3d_records.bin`, `race3d_la
 - `main/game/car_art.cpp`, `car_shadow_art.cpp`: generated car pictures and shadow masks (see `tools/import_*.py`)
 - `main/game/tech_art.cpp`: pit crew technician pictures imported from `tools/technician_sheet.png` (`python3 tools/import_technicians.py tools/technician_sheet.png main/game`)
 - `server/`: the race server (Node, Render), `site/`: the browser control page (GitHub Pages)
+
+## Licence
+
+Création originale de Jicehel (Jean-Charles Lebeau), publiée sous licence **[Creative Commons Attribution - Pas d'Utilisation Commerciale 4.0 (CC BY-NC 4.0)](LICENSE)** : tu peux copier, modifier et partager librement, avec mention de l'auteur, mais pas à des fins commerciales. Le texte complet est dans le fichier [LICENSE](LICENSE). Les bibliothèques et ressources tierces gardent leur propre licence.
