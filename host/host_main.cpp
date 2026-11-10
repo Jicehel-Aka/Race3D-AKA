@@ -26,7 +26,7 @@ uint32_t millis() { return s_headless ? s_fakeMs : SDL_GetTicks(); }
 void* allocLarge(size_t n) { return malloc(n); }
 void freeLarge(void* p) { free(p); }
 void setEngine(float rpm, float thr, float vol) { s_synth.setEngine(rpm, thr, vol); }
-void setNoise(float rumble, float skid) { s_synth.setNoise(rumble, skid); }
+void setNoise(float rumble, float skid, float rain) { s_synth.setNoise(rumble, skid, rain); }
 void playSfx(int id) { s_synth.play(id); }
 void playVoice(const uint8_t* data, size_t bytes) { s_synth.playVoice(data, (int)bytes); }
 void playMusic(int song, bool restart) { s_synth.setSong(song, restart); }

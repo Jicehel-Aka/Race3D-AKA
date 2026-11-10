@@ -110,6 +110,8 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
         }
     }
     training = (trackId == TRACK_TRAINING);
+    rain = !training && track_rainy(trackId);
+    tyre = 1.0f;
     if (training) {                       // training: the rivals start far behind and potter along, so the lessons are not disturbed
         for (int i = 0, k = 0; i < CAR_COUNT; ++i) {
             Car& c = cars[i];
@@ -175,7 +177,8 @@ void Race::update(float dt, const plat::Input& in) {
             } else if (cb >= 0) {                                                    // 2: TYRES & TRACKING / 3: ENGINE GARAGE: the crew works on the STOPPED car
                 activeBay = 2 + cb;
                 Crew& cr = crew[cb];
-                bool needs = cb == 0 ? damage > 0.30f : (damage > 0.0f || nitro < 0.99f);
+                bool needs = cb == 0 ? (damage > 0.30f || tyre < 0.75f) : (damage > 0.0f || nitro < 0.99f);
+                if (cr.phase == CREW_IN || cr.phase == CREW_WORK) needs = true;      // a job under way is finished, whatever the gauges say now
                 if (kmh > 7.0f) {                                                    // the car moves again: abort, the crew walks away
                     if (cr.phase == CREW_IN || cr.phase == CREW_WORK) cr.phase = CREW_OUT;
                     cr.serviced = false;
@@ -183,8 +186,8 @@ void Race::update(float dt, const plat::Input& in) {
                 } else if (kmh < 4.0f && needs && !cr.serviced) {
                     if (cr.phase == CREW_IDLE || cr.phase == CREW_OUT) {
                         cr.anchorZ = carZ(p); cr.anchorX = clampf(p.x, 1.84f, 2.34f);
-                        cr.workT = 0; cr.startDamage = damage; cr.startNitro = nitro;
-                        float need = cb == 0 ? (damage - 0.30f) / (kRepair[difficulty] * 1.3f) : fmaxf(damage / kRepair[difficulty], (1.0f - nitro) / 0.65f);
+                        cr.workT = 0; cr.startDamage = damage; cr.startNitro = nitro; cr.startTyre = tyre;
+                        float need = cb == 0 ? fmaxf((damage - 0.30f) / (kRepair[difficulty] * 1.3f), (1.0f - tyre) * 3.2f) : fmaxf(damage / kRepair[difficulty], (1.0f - nitro) / 0.65f);
                         cr.workReq = fmaxf(cb == 0 ? 1.6f : 2.0f, need);
                         cr.phase = CREW_IN; pitT = 0;
                         if (cb == 1 && damage > 0.02f) ev.pitStart = true;
@@ -193,11 +196,11 @@ void Race::update(float dt, const plat::Input& in) {
                     if (cr.phase == CREW_WORK) {                                     // the technicians are beside the car: real work, spread over workReq
                         cr.workT += dt;
                         float f = fminf(1.0f, cr.workT / cr.workReq);
-                        if (cb == 0) damage = cr.startDamage + (fminf(cr.startDamage, 0.30f) - cr.startDamage) * f;
+                        if (cb == 0) { damage = cr.startDamage + (fminf(cr.startDamage, 0.30f) - cr.startDamage) * f; tyre = cr.startTyre + (1.0f - cr.startTyre) * f; }
                         else { damage = cr.startDamage * (1.0f - f); nitro = cr.startNitro + (1.0f - cr.startNitro) * f; }
                         lollipop = cr.workReq - cr.workT < 0.4f ? 2 : 1;
                         if (cr.workT >= cr.workReq) {                                // done: everybody walks away at once, GO!
-                            if (cb == 0) damage = fminf(damage, 0.30f); else { damage = 0; nitro = 1; }
+                            if (cb == 0) { damage = fminf(damage, 0.30f); tyre = 1.0f; } else { damage = 0; nitro = 1; }
                             pullDir = 0; cr.serviced = true; cr.phase = CREW_OUT; pitting = false;
                             lollipop = 3; lollipopT = 2.4f; ev.pitDone = true;
                         }
@@ -268,9 +271,10 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     const float oldX = p.x;
     float dx = dt * 2.0f * pct;
     // tyre grip: a big steering lock at very high speed saturates the front tyres (understeer: the car pushes wide and scrubs speed)
-    float lockLoad = fabsf(steer) * clampf((pct - 0.70f) / 0.30f, 0.0f, 1.0f);
+    const float gk = 0.55f + 0.45f * grip();                      // 1 = full grip; worn tyres and rain lower it
+    float lockLoad = fabsf(steer) * clampf((pct - 0.70f * gk) / 0.30f, 0.0f, 1.0f);
     p.x += dx * steer * (1.0f - 0.32f * lockLoad);
-    p.x -= dx * pct * seg.curve * CENTRIFUGAL;
+    p.x -= dx * pct * seg.curve * CENTRIFUGAL / gk;
 
     // engine damage: weaker engine, lower top speed, pull to one side, stalling, then death
     float dm = clampf((damage - 0.25f) / 0.75f, 0.0f, 1.0f);
@@ -296,9 +300,14 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     if (shiftT > 0) shiftT -= dt;
     float torque = (shiftT > 0 && !nitroOn && launchBoostT <= 0) ? 0.35f : 1.0f;                                     // power cut while the gearbox changes up
     if (gas) p.speed += ACCEL * dt * torque * (nitroOn || launchBoostT > 0 ? 1.9f : 1.0f) * (1.0f - 0.55f * pct * pct) * (0.3f + 0.7f * perf);
-    else if (brake) p.speed -= brakeForce(pct) * dt;
+    else if (brake) p.speed -= brakeForce(pct) * gk * dt;
     else p.speed -= coastForce(pct) * dt;
     if (gas && brake) p.speed -= brakeForce(pct) * dt * 0.5f;
+    if (difficulty == 0 && !training && !brake && gas) {               // easy: the car eases off by itself before a bend that is far too sharp
+        float over = cornerWarn(nullptr);
+        if (over > 0.5f) p.speed -= brakeForce(pct) * gk * dt * 0.5f * over;
+    }
+    if (!training) tyre = fmaxf(0.05f, tyre - dt * (0.003f * pct + 0.010f * fabsf(steer) * pct * pct + (brake ? 0.006f * pct : 0.0f)));
     p.speed -= MAX_SPEED * 0.10f * lockLoad * dt;                                 // cornering drag when the tyres are overloaded
     {   // body pitch for the camera car: dives on the brakes, squats on hard acceleration, settles when cruising
         float tgt = brake ? 1.0f : (gas && pct < 0.65f && p.speed > 100.0f ? -0.7f * (1.0f - pct / 0.65f) : 0.0f);
@@ -342,7 +351,7 @@ void Race::driveAI(Car& c, float dt, float& top) {
         if (k < 14) ahead += cv;
     }
     float corner = 1.0f - fabsf(maxC) / 6.0f * (0.30f - 0.22f * c.skill);
-    top = MAX_SPEED * c.topFactor * corner;
+    top = MAX_SPEED * c.topFactor * corner * (rain ? 0.95f : 1.0f);          // the rivals slow down in the wet too
 
     if (!demo && !c.isPlayer && !player().finished) {
         float gap = player().dist - c.dist;   // > 0 : AI is behind the player

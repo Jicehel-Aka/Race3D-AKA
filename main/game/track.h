@@ -86,6 +86,7 @@ extern const TrackDef g_trackDefs[TRACK_COUNT];
 // The training circuit (training.cpp) is not one of the numbered circuits: it has no records and is not offered online.
 constexpr int TRACK_TRAINING = TRACK_COUNT;
 extern const TrackDef g_trainingDef;
+inline bool track_rainy(int id) { return id == 3 || id == 5; }        // Palm Bay and Night Harbor are wet
 inline const TrackDef& track_def(int id) { return id >= TRACK_COUNT ? g_trainingDef : g_trackDefs[id]; }
 
 void track_build(Track& t, int id);

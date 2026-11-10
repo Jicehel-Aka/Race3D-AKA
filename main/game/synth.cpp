@@ -221,13 +221,14 @@ void Synth::render(int16_t* out, int n, int rate) {
     const float vStep = 8000.0f / rate;
     const float dt = 1.0f / rate;
     const float rpmT = m_rpm, volT = m_vol, thr = m_thr;
-    const float rumT = m_rumble, skidT = m_skid, master = m_master;
+    const float rainT = m_rain, rumT = m_rumble, skidT = m_skid, master = m_master;
     for (int i = 0; i < n; ++i) {
         // smooth control values to avoid zipper noise
         m_rpmS += (rpmT - m_rpmS) * 0.002f;
         m_volS += (volT - m_volS) * 0.002f;
         m_rumbleS += (rumT - m_rumbleS) * 0.002f;
         m_skidS += (skidT - m_skidS) * 0.002f;
+        m_rainS += (rainT - m_rainS) * 0.0005f;
 
         float s = 0;
         // engine: saw + sub square, combustion noise, low-passed
@@ -249,6 +250,11 @@ void Synth::render(int16_t* out, int n, int rate) {
             s += m_nLp * m_rumbleS * (m_amPhase < 0.5f ? 1.0f : 0.35f) * 1.6f;
         }
         // tyre squeal: band-passed noise
+        if (m_rainS > 0.001f) {                               // rain: high-passed hiss
+            float nz = noise();
+            m_rLp += (nz - m_rLp) * 0.30f;
+            s += (nz - m_rLp) * m_rainS * 0.07f;
+        }
         if (m_skidS > 0.001f) {
             float nz = noise();
             m_nHp += (nz - m_nHp) * 0.3f;

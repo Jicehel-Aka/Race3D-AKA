@@ -916,6 +916,16 @@ void render_world(const Race& r, float time) {
             line(x0, y0, x1, y1, rgb(230, 240, 255));
         }
     }
+    if (r.rain) {                                                  // rain: a grey-blue veil and falling streaks
+        blendRect(0, 0, W, H, rgb(10, 20, 45), 55);
+        const int frame = (int)(time * 30);
+        for (int k = 0; k < 70; ++k) {
+            uint32_t h = (uint32_t)(k * 2654435761u) ^ (uint32_t)(frame * 40503u);
+            h ^= h >> 13; h *= 1274126177u; h ^= h >> 16;
+            int x = (int)(h % (W + 20)) - 10, y = (int)((h >> 9) % (H - 60));
+            line(x, y, x - 3, y + 10, rgb(150, 170, 210));
+        }
+    }
 }
 
 // =================================================================== particles
@@ -1264,6 +1274,20 @@ void render_hud(const Race& r, float time) {
     }
     rect(gx - 2, gy - 2, 10, gh + 4, rgb(200, 220, 255));
     text(gx - 9, gy - 12, TR("N2O"), r.nitro > 0.99f ? rgb(120, 255, 255) : rgb(150, 170, 200));
+
+    // tyre wear (top right, under the lap time)
+    {
+        const int bx = 250, by = 57, bw = 62;
+        bool low = r.tyre < 0.30f, blink = low && ((int)(time * 5) & 1);
+        text(bx - 46, by - 1, TR("TYRES"), low ? rgb(255, 140, 90) : rgb(150, 170, 200));
+        blendRect(bx - 1, by - 1, bw + 2, 7, rgb(0, 0, 0), 150);
+        int fw = (int)(r.tyre * bw);
+        uint16_t c = r.tyre > 0.5f ? lerp(rgb(240, 220, 60), rgb(90, 230, 90), (int)((r.tyre - 0.5f) * 512)) : lerp(rgb(255, 50, 30), rgb(240, 220, 60), (int)(r.tyre * 512));
+        if (blink) c = rgb(255, 255, 255);
+        for (int y = 0; y < 5; ++y) hline(bx, bx + fw - 1, by + y, c);
+        rect(bx - 2, by - 2, bw + 4, 9, blink ? rgb(255, 80, 60) : rgb(200, 220, 255));
+        if (r.rain) text(bx - 46, by + 9, "~~~", rgb(150, 190, 255));
+    }
 
     // engine health gauge (full when mint, empties as damage grows)
     {

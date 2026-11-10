@@ -33,7 +33,7 @@ void     freeLarge(void* p);
 
 // Audio. Engine values are read continuously by the audio thread.
 void setEngine(float rpm01, float throttle, float volume);
-void setNoise(float rumble, float skid);        // 0..1 offroad rumble / tyre squeal
+void setNoise(float rumble, float skid, float rain = 0);   // 0..1 offroad rumble / tyre squeal / rain on the roof
 void playSfx(int id);
 void playMusic(int song, bool restart = false);   // song index (music.h), -1 = stop
 void setMusicVolume(float v);                     // 0..1

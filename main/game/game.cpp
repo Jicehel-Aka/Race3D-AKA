@@ -601,7 +601,7 @@ void audio_update() {
     else if (r.sputter > 0) vol *= 0.15f;
     else if (dmg > 0.4f) vol *= 1.0f - 0.35f * ((int)(g_time * 23) % 3 == 0 ? 1.0f : 0.0f) * (dmg - 0.4f) / 0.6f;
     plat::setEngine(r.rpm * (1.0f - 0.25f * dmg), r.nitroOn ? 1.0f : 0.6f * (1.0f - 0.4f * dmg), vol);
-    plat::setNoise(active ? r.offroad : 0, active ? r.skid : 0);
+    plat::setNoise(active ? r.offroad : 0, active ? r.skid : 0, active && r.rain ? 1.0f : 0.0f);
 }
 
 void handle_events() {

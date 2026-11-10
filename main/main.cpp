@@ -62,7 +62,7 @@ void* allocLarge(size_t n) {
 void freeLarge(void* p) { heap_caps_free(p); }
 
 void setEngine(float rpm, float thr, float vol) { s_synth.setEngine(rpm, thr, vol); }
-void setNoise(float rumble, float skid) { s_synth.setNoise(rumble, skid); }
+void setNoise(float rumble, float skid, float rain) { s_synth.setNoise(rumble, skid, rain); }
 void playSfx(int id) {
     s_synth.play(id);
     if (id == SFX_CRASH) s_player.vibrator(180);

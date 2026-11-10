@@ -7,7 +7,7 @@ class Synth {
 public:
     struct Step { float f0, f1, vol, dur; uint8_t wave; };   // wave: 0 square 1 noise 2 triangle 3 saw
     void setEngine(float rpm01, float throttle, float volume) { m_rpm = rpm01; m_thr = throttle; m_vol = volume; }
-    void setNoise(float rumble, float skid) { m_rumble = rumble; m_skid = skid; }
+    void setNoise(float rumble, float skid, float rain = 0) { m_rumble = rumble; m_skid = skid; m_rain = rain; }
     void play(int sfx);                          // plat::Sfx id
     void render(int16_t* out, int n, int rate);  // mono 16-bit
     void setMaster(float v) { m_master = v; }
@@ -21,7 +21,7 @@ public:
 private:
     struct Voice { const Step* steps = nullptr; int count = 0, cur = 0; float t = 0, phase = 0; };
 
-    volatile float m_rpm = 0, m_thr = 0, m_vol = 0, m_rumble = 0, m_skid = 0, m_master = 0.8f;
+    volatile float m_rpm = 0, m_thr = 0, m_vol = 0, m_rumble = 0, m_skid = 0, m_rain = 0, m_master = 0.8f;
     volatile int m_req[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
     volatile unsigned m_reqW = 0;
     unsigned m_reqR = 0;
@@ -37,7 +37,7 @@ private:
 
     Voice m_voice[3];
     float m_ePhase = 0, m_ePhase2 = 0, m_eLp = 0, m_rpmS = 0, m_volS = 0;
-    float m_nLp = 0, m_nHp = 0, m_rumbleS = 0, m_skidS = 0, m_amPhase = 0;
+    float m_nLp = 0, m_nHp = 0, m_rumbleS = 0, m_skidS = 0, m_rainS = 0, m_rLp = 0, m_amPhase = 0;
     uint32_t m_lfsr = 0xACE1u;
 
     // music

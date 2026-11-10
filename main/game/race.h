@@ -112,7 +112,7 @@ public:
     float lollipopT = 0, launchBoostT = 0;
     // pit crews of the two serviced bays (0 = tyres & tracking, 1 = engine garage): wait outside, walk to the stopped car, work, walk away
     enum CrewPhase : uint8_t { CREW_IDLE, CREW_IN, CREW_WORK, CREW_OUT };
-    struct Crew { CrewPhase phase = CREW_IDLE; float progress = 0, workT = 0, workReq = 2, anchorZ = 0, anchorX = 2.1f, startDamage = 0, startNitro = 1; bool serviced = false; };
+    struct Crew { CrewPhase phase = CREW_IDLE; float progress = 0, workT = 0, workReq = 2, anchorZ = 0, anchorX = 2.1f, startDamage = 0, startNitro = 1, startTyre = 1; bool serviced = false; };
     Crew  crew[2];
     bool  onApron = false;                 // player is on the pit apron (speed limiter, no grass penalty)
     bool  inPitZone(const Car& c) const;
@@ -122,6 +122,9 @@ public:
     int gear = 1;
     float rpm = 0;
     float gasGrace = 0;              // seconds left in which the nitro button keeps the throttle after A was lifted
+    float tyre = 1.0f;               // tyre condition 1 = new .. 0 = bald (wears with cornering and braking, renewed in the TYRES bay)
+    bool  rain = false;              // wet circuit: less grip, rain on the screen
+    float grip() const { return (rain ? 0.88f : 1.0f) * (0.55f + 0.45f * tyre); }
     bool training = false;           // the training circuit (lessons + slow rivals)
     float shiftT = 0;                      // > 0 while the gearbox changes up: engine torque cut
     float pitch = 0;                       // body pitch, -1 squat under power .. +1 dive under braking (visual)
