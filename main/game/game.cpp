@@ -141,7 +141,10 @@ void go_title() {
     start_demo();
 }
 
+float g_coachBend = 0, g_coachGrass = 0; bool g_tipBend = false, g_tipGrass = false;   // driving coach (easy / normal)
+
 void start_race() {
+    g_coachBend = g_coachGrass = 0; g_tipBend = g_tipGrass = false;
     g_onlineRace = false;
     g_race.playerIdx = CAR_COUNT - 1;
     g_race.setup(g_track, g_diff, kLaps[g_lapsSel], false);
@@ -582,6 +585,14 @@ void handle_events() {
         if (lastD < 0.5f && d >= 0.5f) message("ENGINE DAMAGED", rgb(255, 210, 90), rgb(190, 90, 10), 2.0f);
         else if (lastD < 0.8f && d >= 0.8f) message("ENGINE FAILING!", rgb(255, 120, 90), rgb(190, 20, 10), 2.2f);
         lastD = d;
+    }
+    if (g_diff <= 1 && g_state == ST_RACING && !g_onlineRace && !g_race.player().retired) {   // coach: one tip per race and per topic
+        const float dtc = 1.0f / 60.0f;
+        int cd = 0; float warn = g_race.cornerWarn(&cd);
+        g_coachBend = (warn > 0.7f && g_race.speedKmh() > 150.0f) ? g_coachBend + dtc : 0;
+        g_coachGrass = g_race.offroad > 0.9f ? g_coachGrass + dtc : 0;
+        if (!g_tipBend && g_coachBend > 0.6f) { g_tipBend = true; message("BRAKE BEFORE BENDS", rgb(255, 200, 90), rgb(190, 80, 10), 2.2f); }
+        else if (!g_tipGrass && g_coachGrass > 1.2f) { g_tipGrass = true; message("GRASS SLOWS YOU DOWN", rgb(170, 230, 130), rgb(40, 120, 30), 2.2f); }
     }
     if (e.pitStart) message("PIT STOP", rgb(255, 230, 120), rgb(200, 120, 10), 1.5f);
     if (e.pitDone) { plat::playSfx(plat::SFX_LAP); message(g_race.damage <= 0.01f ? "ENGINE REPAIRED" : "TYRES & TRACKING OK", rgb(160, 255, 200), rgb(20, 160, 90), 1.8f); }
