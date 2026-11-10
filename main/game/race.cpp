@@ -218,7 +218,7 @@ void Race::update(float dt, const plat::Input& in) {
     float pct = p.speed / MAX_SPEED;
     int g = 1;
     while (g < 6 && pct > gearTop[g]) ++g;
-    if (g > gear && (in.held & plat::BTN_A) && !autopilot) shiftT = 0.14f;      // upshift: torque cut + the revs fall
+    if (g > gear && (in.held & plat::BTN_A) && !autopilot) { shiftT = 0.14f; plat::playSfx(plat::SFX_SHIFT); }      // upshift: torque cut + the revs fall
     gear = g;
     float lo = gearTop[g - 1], hi = g == 6 ? 1.05f : gearTop[g];
     float target = 0.22f + 0.78f * clampf((pct - lo) / (hi - lo), 0, 1);
@@ -313,6 +313,7 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
 
     float lateral = fabsf(seg.curve) * pct * pct;
     skid = clampf((lateral - 3.2f) / 2.5f, 0, 1) * (fabsf(steer) > 0.5f ? 1.0f : 0.4f);
+    skid = fmaxf(skid, clampf(lockLoad * 1.6f, 0, 1) * (brake ? 1.0f : 0.7f));   // overloaded front tyres squeal
     p.braking = brake;
     p.steerVis = steer;
     p.dist += p.speed * dt;

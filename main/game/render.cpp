@@ -903,9 +903,11 @@ void render_world(const Race& r, float time) {
         if (ps.pit >= PIT_ENTRY && ps.pit <= PIT_END) draw_crew(r, ps, false);
     }
 
-    // nitro speed streaks
-    if (r.nitroOn) {
-        for (int k = 0; k < 14; ++k) {
+    // speed streaks: full set on nitro, a few at the edges above 85% of top speed
+    float spdN = r.player().speed / MAX_SPEED;
+    if (r.nitroOn || spdN > 0.85f) {
+        int nStreak = r.nitroOn ? 14 : (int)((spdN - 0.85f) / 0.15f * 6.0f) + 1;
+        for (int k = 0; k < nStreak; ++k) {
             uint32_t hsh = hash32((uint32_t)(time * 30) * 131 + k);
             float a = (hsh % 6283) / 1000.0f;
             float r0 = 90 + (hsh >> 13) % 60, r1 = r0 + 30 + (hsh >> 20) % 40;

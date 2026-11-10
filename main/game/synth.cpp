@@ -28,6 +28,7 @@ static const Synth::Step kHeavyB[] = { S(90, 30, 0.9f, 0.45f, 0), S(55, 28, 0.7f
 static const Synth::Step kScrapeA[] = { S(2600, 2000, 0.35f, 0.12f, 1), S(2200, 1500, 0.30f, 0.14f, 1), S(1800, 1400, 0.25f, 0.12f, 1) };
 static const Synth::Step kScrapeB[] = { S(1100, 800, 0.15f, 0.34f, 3) };
 static const Synth::Step kNitro[] = { S(300, 3000, 0.45f, 0.5f, 1), S(3000, 900, 0.3f, 0.4f, 1) };
+static const Synth::Step kShift[] = { S(1900, 500, 0.22f, 0.025f, 1), S(190, 95, 0.40f, 0.07f, 2) };
 static const Synth::Step kLap[] = { S(784, 784, 0.35f, 0.08f, 2), S(988, 988, 0.35f, 0.08f, 2), S(1319, 1319, 0.4f, 0.22f, 2) };
 static const Synth::Step kFinish[] = {
     S(523, 523, 0.4f, 0.12f, 0), S(659, 659, 0.4f, 0.12f, 0), S(784, 784, 0.4f, 0.12f, 0),
@@ -62,6 +63,7 @@ void Synth::start(int sfx) {
     case plat::SFX_HIT_ICE:   prog = kIceA;     n = countOf(kIceA);     slot = 1; prog2 = kIceB;    n2 = countOf(kIceB);    break;
     case plat::SFX_HIT_HEAVY: prog = kHeavyA;   n = countOf(kHeavyA);   slot = 1; prog2 = kHeavyB;  n2 = countOf(kHeavyB);  break;
     case plat::SFX_SCRAPE:    prog = kScrapeA;  n = countOf(kScrapeA);  slot = 1; prog2 = kScrapeB; n2 = countOf(kScrapeB); break;
+    case plat::SFX_SHIFT:     prog = kShift;    n = countOf(kShift);    slot = 2; break;
     default: return;
     }
     Voice& v = m_voice[slot];

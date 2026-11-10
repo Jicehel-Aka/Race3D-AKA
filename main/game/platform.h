@@ -23,6 +23,7 @@ enum Sfx : int {
     SFX_BUMP, SFX_NITRO, SFX_LAP, SFX_FINISH,
     // impacts by material
     SFX_HIT_SOFT, SFX_HIT_WOOD, SFX_HIT_ROCK, SFX_HIT_METAL, SFX_HIT_ICE, SFX_HIT_HEAVY, SFX_SCRAPE,
+    SFX_SHIFT,
     SFX_COUNT
 };
 
