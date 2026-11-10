@@ -11,8 +11,10 @@ const char* const g_diffNames[DIFF_COUNT] = { "EASY", "NORMAL", "HARD", "EXPERT"
 namespace {
 
 constexpr float ACCEL = MAX_SPEED / 5.0f;
-constexpr float BRAKING = MAX_SPEED;
+constexpr float BRAKING = MAX_SPEED;                              // base figures: see brakeForce() / coastForce()
 constexpr float DECEL = MAX_SPEED / 5.0f;
+inline float brakeForce(float pct) { return MAX_SPEED * (0.55f + 0.20f * pct); }            // 240 km/h to a stop in ~1.6 s, a bit less bite when slow
+inline float coastForce(float pct) { return MAX_SPEED * (0.07f + 0.20f * pct * pct); }      // rolling resistance + aero drag (grows with the square of speed)
 constexpr float OFFROAD_DECEL = MAX_SPEED / 2.0f;
 constexpr float OFFROAD_LIMIT = MAX_SPEED / 4.0f;
 constexpr float CENTRIFUGAL = 0.3f;
@@ -216,10 +218,12 @@ void Race::update(float dt, const plat::Input& in) {
     float pct = p.speed / MAX_SPEED;
     int g = 1;
     while (g < 6 && pct > gearTop[g]) ++g;
+    if (g > gear && (in.held & plat::BTN_A) && !autopilot) shiftT = 0.14f;      // upshift: torque cut + the revs fall
     gear = g;
     float lo = gearTop[g - 1], hi = g == 6 ? 1.05f : gearTop[g];
     float target = 0.22f + 0.78f * clampf((pct - lo) / (hi - lo), 0, 1);
     if (!started) target = (in.held & plat::BTN_A) ? 0.9f : 0.15f;
+    if (shiftT > 0) target = fmaxf(0.15f, target - 0.30f);
     rpm += (target - rpm) * fminf(1, dt * 12);
 }
 
@@ -252,7 +256,9 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
 
     const float oldX = p.x;
     float dx = dt * 2.0f * pct;
-    p.x += dx * steer;
+    // tyre grip: a big steering lock at very high speed saturates the front tyres (understeer: the car pushes wide and scrubs speed)
+    float lockLoad = fabsf(steer) * clampf((pct - 0.70f) / 0.30f, 0.0f, 1.0f);
+    p.x += dx * steer * (1.0f - 0.32f * lockLoad);
     p.x -= dx * pct * seg.curve * CENTRIFUGAL;
 
     // engine damage: weaker engine, lower top speed, pull to one side, stalling, then death
@@ -276,10 +282,17 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     if (launchBoostT > 0) launchBoostT -= dt;
     float maxS = MAX_SPEED * perf * (nitroOn || launchBoostT > 0 ? NITRO_BOOST : 1.0f);
     if (onApron) maxS = fminf(maxS, MAX_SPEED * PIT_LIMIT_KMH / 240.0f);                 // pit lane speed limiter
-    if (gas) p.speed += ACCEL * dt * (nitroOn || launchBoostT > 0 ? 1.9f : 1.0f) * (1.0f - 0.55f * pct * pct) * (0.3f + 0.7f * perf);
-    else if (brake) p.speed -= BRAKING * dt;
-    else p.speed -= DECEL * dt;
-    if (gas && brake) p.speed -= BRAKING * dt * 0.5f;
+    if (shiftT > 0) shiftT -= dt;
+    float torque = shiftT > 0 ? 0.15f : 1.0f;                                     // power cut while the gearbox changes up
+    if (gas) p.speed += ACCEL * dt * torque * (nitroOn || launchBoostT > 0 ? 1.9f : 1.0f) * (1.0f - 0.55f * pct * pct) * (0.3f + 0.7f * perf);
+    else if (brake) p.speed -= brakeForce(pct) * dt;
+    else p.speed -= coastForce(pct) * dt;
+    if (gas && brake) p.speed -= brakeForce(pct) * dt * 0.5f;
+    p.speed -= MAX_SPEED * 0.10f * lockLoad * dt;                                 // cornering drag when the tyres are overloaded
+    {   // body pitch for the camera car: dives on the brakes, squats on hard acceleration, settles when cruising
+        float tgt = brake ? 1.0f : (gas && pct < 0.65f && p.speed > 100.0f ? -0.7f * (1.0f - pct / 0.65f) : 0.0f);
+        pitch += (tgt - pitch) * fminf(1.0f, dt * 7.0f);
+    }
 
     float ax = fabsf(p.x);
     offroad = ax > 1.12f ? 1.0f : (ax > 1.0f ? 0.35f : 0.0f);
@@ -576,4 +589,18 @@ void Race::estimateUnfinished() {
         c.finished = true;
     }
     ranking();
+}
+
+float Race::cornerWarn(int* dir) const {          // assist: warns before a bend that is too sharp for the current speed
+    const Car& p = player();
+    int n = track.count(), idx = track.indexAt(carZ(p));
+    float pct = p.speed / MAX_SPEED, worst = 0; int d = 0;
+    for (int k = 6; k < 34; ++k) {
+        float cv = track.segs[(idx + k) % n].curve;
+        float safe = 1.0f - fabsf(cv) / 6.0f * 0.30f;                        // same law as the rivals' cornering speed
+        float over = (pct - safe) / 0.12f;
+        if (fabsf(cv) > 2.2f && over > worst) { worst = over; d = cv > 0 ? 1 : -1; }
+    }
+    if (dir) *dir = d;
+    return worst > 1.0f ? 1.0f : (worst < 0 ? 0 : worst);
 }

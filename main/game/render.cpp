@@ -870,7 +870,7 @@ void render_world(const Race& r, float time) {
             float pct = pl.speed / MAX_SPEED;
             if (r.offroad > 0) bounce = (float)((int)(time * 40) & 1) * 2.0f * r.offroad * (pct > 0.05f ? 1 : 0);
             else bounce = ((int)(time * 12) & 1) * (pct > 0.3f ? 1.0f : 0.0f);
-            int px = W / 2 - 56 + (int)(shakeX * 0.01f), py = H - 58 - 11 - (int)bounce;
+            int px = W / 2 - 56 + (int)(shakeX * 0.01f), py = H - 58 - 11 - (int)bounce + (int)lroundf(r.pitch * 2.0f);
             // night headlights on the tarmac
             if (th.ambient < 256) {
                 for (int y = H / 2 + 22; y < py + 20; ++y) {
@@ -1197,6 +1197,15 @@ void render_hud(const Race& r, float time) {
     snprintf(buf, sizeof buf, "/%d", CAR_COUNT);
     textOutline(8 + 36, 26, buf, rgb(255, 255, 255), rgb(0, 0, 0));
     render_tower(r, 6, 44);
+
+    if (r.difficulty <= 1 && r.started && !pl.retired) {              // driving assist (easy / normal): chevrons before a bend that is too sharp for the speed
+        int d = 0; float warn = r.cornerWarn(&d);
+        if (warn > 0.05f && d != 0 && ((int)(time * (5.0f + 5.0f * warn)) & 1)) {
+            uint16_t c = warn > 0.6f ? rgb(255, 60, 40) : rgb(255, 200, 40);
+            int cx = W / 2 + d * 44, cy = HORIZON + 26;
+            for (int k = 0; k < 3; ++k) { int x = cx + d * k * 11; fillTri(x - d * 5, cy - 8, x - d * 5, cy + 8, x + d * 5, cy, rgb(20, 10, 10)); fillTri(x - d * 4, cy - 6, x - d * 4, cy + 6, x + d * 4, cy, c); }
+        }
+    }
 
     // lap + times
     snprintf(buf, sizeof buf, "%d/%d", r.playerLap(), r.laps);
