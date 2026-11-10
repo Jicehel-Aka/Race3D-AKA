@@ -128,6 +128,7 @@ jobs:
         run: |
           mkdir -p pc/AKATurbo3D
           cp host/dist/AKATurbo3D.exe pc/AKATurbo3D/
+          mkdir -p pc/AKATurbo3D/race3d && cp -r sdcard_files/race3d/voice pc/AKATurbo3D/race3d/      # coach voice clips (training)
           cd pc && zip -r "../AKA-Turbo-3D-GP-v${{ inputs.version }}-pc-windows.zip" AKATurbo3D
       - uses: actions/upload-artifact@v4
         with:

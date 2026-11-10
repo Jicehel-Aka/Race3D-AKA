@@ -109,6 +109,15 @@ void Race::setup(int trackId, int diff, int lapCount, bool demoMode) {
             c.launchDelay = 0.1f;
         }
     }
+    training = (trackId == TRACK_TRAINING);
+    if (training) {                       // training: the rivals start far behind and potter along, so the lessons are not disturbed
+        for (int i = 0, k = 0; i < CAR_COUNT; ++i) {
+            Car& c = cars[i];
+            if (c.isPlayer) continue;
+            c.dist -= SEG_LEN * (45.0f + 14.0f * k++);
+            c.topFactor = 0.42f + 0.02f * k;
+        }
+    }
     if (demo) started = true;
     ranking();
 }

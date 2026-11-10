@@ -1,4 +1,5 @@
 #include "synth.h"
+#include <string.h>
 #include "platform.h"
 #include "music.h"
 #include <math.h>
@@ -36,6 +37,36 @@ static const Synth::Step kFinish[] = {
 #undef S
 
 template <typename T, int N> static int countOf(const T (&)[N]) { return N; }
+
+static const int16_t kAdpcmStep[89] = {7,8,9,10,11,12,13,14,16,17,19,21,23,25,28,31,34,37,41,45,50,55,60,66,73,80,88,97,107,118,130,143,157,173,190,209,230,253,279,307,337,371,408,449,494,544,598,658,724,796,876,963,1060,1166,1282,1411,1552,1707,1878,2066,2272,2499,2749,3024,3327,3660,4026,4428,4871,5358,5894,6484,7132,7845,8630,9493,10442,11487,12635,13899,15289,16818,18500,20350,22385,24623,27086,29794,32767};
+static const int8_t kAdpcmIdx[8] = {-1,-1,-1,-1,2,4,6,8};
+
+void Synth::playVoice(const uint8_t* data, int bytes) {
+    if (!data || bytes < 8 || bytes > VOICE_MAX) return;
+    if (m_vSeen != m_vSerial) return;                         // the previous request has not been picked up yet
+    int w = (m_vBuf == 0) ? 1 : 0;                            // write into the buffer the audio thread is not reading
+    if (!m_vbuf[w]) { m_vbuf[w] = (uint8_t*)plat::allocLarge(VOICE_MAX); if (!m_vbuf[w]) return; }
+    memcpy(m_vbuf[w], data, bytes);
+    m_vReqBuf = w; m_vReqLen = bytes;
+    m_vSerial = m_vSerial + 1;
+}
+
+// next decoded sample (-32768..32767) of the running clip
+int Synth::voiceNext() {
+    if (m_vPos >= m_vLen) { m_vBuf = -1; return 0; }
+    const uint8_t b = m_vbuf[m_vBuf][m_vPos];
+    int code = m_vNib ? (b >> 4) : (b & 15);
+    if (m_vNib) { m_vNib = 0; ++m_vPos; } else m_vNib = 1;
+    int step = kAdpcmStep[m_vIdx], d = step >> 3;
+    if (code & 4) d += step;
+    if (code & 2) d += step >> 1;
+    if (code & 1) d += step >> 2;
+    m_vPred += (code & 8) ? -d : d;
+    if (m_vPred > 32767) m_vPred = 32767; else if (m_vPred < -32768) m_vPred = -32768;
+    m_vIdx += kAdpcmIdx[code & 7];
+    if (m_vIdx < 0) m_vIdx = 0; else if (m_vIdx > 88) m_vIdx = 88;
+    return m_vPred;
+}
 
 void Synth::play(int sfx) {
     unsigned w = m_reqW;
@@ -180,6 +211,14 @@ void Synth::render(int16_t* out, int n, int rate) {
             if (m_song >= 0) musicStep(rate);
         }
     }
+    if (m_vSeen != m_vSerial) {                // new voice clip
+        m_vSeen = m_vSerial;
+        m_vBuf = m_vReqBuf; m_vLen = m_vReqLen; m_vPos = 4; m_vNib = 0;
+        const uint8_t* h = m_vbuf[m_vBuf];
+        m_vPred = (int16_t)(h[0] | (h[1] << 8)); m_vIdx = h[2] > 88 ? 88 : h[2];
+        m_vPrev = m_vPred; m_vNext = voiceNext(); m_vFrac = 0;
+    }
+    const float vStep = 8000.0f / rate;
     const float dt = 1.0f / rate;
     const float rpmT = m_rpm, volT = m_vol, thr = m_thr;
     const float rumT = m_rumble, skidT = m_skid, master = m_master;
@@ -235,6 +274,12 @@ void Synth::render(int16_t* out, int n, int rate) {
             s += w * env;
             v.t += dt;
             if (v.t >= st.dur) { v.t = 0; if (++v.cur >= v.count) v.steps = nullptr; }
+        }
+        if (m_vBuf >= 0) {                                    // coach voice, linear resample 8 kHz -> output rate
+            float v = (m_vPrev + (m_vNext - m_vPrev) * m_vFrac) * (1.0f / 32768.0f);
+            s += v * 0.9f;
+            m_vFrac += vStep;
+            while (m_vFrac >= 1.0f && m_vBuf >= 0) { m_vFrac -= 1.0f; m_vPrev = m_vNext; m_vNext = voiceNext(); }
         }
         s *= master;
         if (s > 1) s = 1; else if (s < -1) s = -1;

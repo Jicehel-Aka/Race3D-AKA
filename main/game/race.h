@@ -121,6 +121,7 @@ public:
     float offroad = 0, skid = 0;
     int gear = 1;
     float rpm = 0;
+    bool training = false;           // the training circuit (lessons + slow rivals)
     float shiftT = 0;                      // > 0 while the gearbox changes up: engine torque cut
     float pitch = 0;                       // body pitch, -1 squat under power .. +1 dive under braking (visual)
     float cornerWarn(int* dir) const;      // 0..1: how much too fast the player is for the sharpest bend ahead (dir = -1 left / +1 right)

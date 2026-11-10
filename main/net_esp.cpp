@@ -288,6 +288,14 @@ int netRecv(void* buf, size_t cap, bool* binary) {
     return ring_pop(s_rx, buf, cap, binary);
 }
 
+int readFile(const char* path, void* buf, size_t cap) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return -1;
+    size_t n = fread(buf, 1, cap + 1, f);
+    fclose(f);
+    return n > cap ? -1 : (int)n;
+}
+
 bool readTextFile(const char* path, char* buf, size_t cap) {
     FILE* f = fopen(path, "rb");
     if (!f) return false;

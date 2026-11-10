@@ -7,6 +7,7 @@
 #include "music.h"
 #include "online.h"
 #include "i18n.h"
+#include "training.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -94,6 +95,33 @@ void message(const char* s, uint16_t top, uint16_t bot, float dur = 1.6f) {
     g_msgTop = top; g_msgBot = bot; g_msgT = dur;
 }
 
+// ------------------------------------------------------------ training coach: subtitles + voice clip from the SD card
+bool training_mode() { return g_track == TRACK_TRAINING && !g_onlineRace; }
+char g_sub[2][44] = { "", "" };
+float g_subT = 0;
+uint8_t* g_voiceBuf = nullptr;
+
+void coach_say(const char* key, int voice) {
+    const char* t = TR(key);
+    int len = (int)strlen(t), cut = len;
+    if (len > 24) {                       // two balanced lines (never wider than 38 characters)
+        int best = -1;
+        for (int i = 1; i < len - 1; ++i) if (t[i] == ' ' && i <= 38 && len - i - 1 <= 43 && (best < 0 || abs(i - len / 2) < abs(best - len / 2))) best = i;
+        if (best > 0) cut = best;
+    }
+    snprintf(g_sub[0], sizeof g_sub[0], "%.*s", cut, t);
+    snprintf(g_sub[1], sizeof g_sub[1], "%.43s", t[cut] == ' ' ? t + cut + 1 : t + cut);
+    float dur = 3.5f;
+    if (!g_voiceBuf) g_voiceBuf = (uint8_t*)plat::allocLarge(20000);
+    if (g_voiceBuf) {
+        char path[48];
+        snprintf(path, sizeof path, "/sdcard/race3d/voice/%s/%02d.adp", plat::languageCode(), voice);
+        int n = plat::readFile(path, g_voiceBuf, 20000);
+        if (n > 8) { plat::playVoice(g_voiceBuf, (size_t)n); dur = n / 4000.0f + 1.0f; }
+    }
+    g_subT = dur;
+}
+
 void load_records() {
     if (plat::loadBlob(&g_rec, sizeof g_rec) && g_rec.magic == REC_MAGIC) { g_rec.name[NAME_MAX] = 0; return; }
     RecordsV3 v3;
@@ -122,7 +150,7 @@ void apply_music_volume() { plat::setMusicVolume(g_rec.musicOff ? 0.0f : 0.8f); 
 
 void start_demo() {
     g_race.playerIdx = CAR_COUNT - 1;
-    plat::playMusic(g_trackDefs[g_track].music);
+    plat::playMusic(track_def(g_track).music);
     g_race.setup(g_track, DIFF_HARD, 99, true);
     g_race.cameraZ();
     // spread the field so the attract mode shows some traffic
@@ -144,12 +172,14 @@ void go_title() {
 float g_coachBend = 0, g_coachGrass = 0; bool g_tipBend = false, g_tipGrass = false;   // driving coach (easy / normal)
 
 void start_race() {
+    g_subT = 0; training::reset();
     g_coachBend = g_coachGrass = 0; g_tipBend = g_tipGrass = false;
     g_onlineRace = false;
     g_race.playerIdx = CAR_COUNT - 1;
-    g_race.setup(g_track, g_diff, kLaps[g_lapsSel], false);
+    if (g_track == TRACK_TRAINING) g_race.setup(g_track, DIFF_EASY, 2, false);     // gentle rivals, two laps: the lessons are on lap 1
+    else g_race.setup(g_track, g_diff, kLaps[g_lapsSel], false);
     g_race.cars[g_race.playerIdx].name = player_name();
-    plat::playMusic(g_trackDefs[g_track].music, true);
+    plat::playMusic(track_def(g_track).music, true);
     fx_clear();
     g_state = ST_COUNTDOWN; g_stateT = 0;
     g_countBeep = 0; g_msgT = 0;
@@ -160,7 +190,7 @@ void start_race() {
 void finish_race() {
     g_race.estimateUnfinished();
     const Car& p = g_race.player();
-    if (g_onlineRace) { g_newLapRecord = g_newRaceRecord = false; g_state = ST_RESULTS; g_stateT = 0; return; }
+    if (g_onlineRace || g_track == TRACK_TRAINING) { g_newLapRecord = g_newRaceRecord = false; g_state = ST_RESULTS; g_stateT = 0; return; }   // no records online or in training
     if (!p.retired && p.bestLap > 0 && (g_rec.bestLap[g_track] == 0 || p.bestLap < g_rec.bestLap[g_track])) {
         g_rec.bestLap[g_track] = p.bestLap; g_newLapRecord = true;
     }
@@ -184,7 +214,7 @@ void start_online_race() {
         c.remote = true;
         c.netDist = c.dist; c.netX = c.x; c.netSpeed = 0; c.netSteer = 0; c.netAge = 0;
     }
-    plat::playMusic(g_trackDefs[g_track].music, true);
+    plat::playMusic(track_def(g_track).music, true);
     fx_clear();
     g_onlineRace = true; g_lost = false; g_telemT = 0; g_paused = false;
     g_state = ST_COUNTDOWN; g_stateT = 0;
@@ -272,6 +302,7 @@ void enter_online_lobby() {
 }
 
 void go_online() {
+    if (g_track == TRACK_TRAINING) g_track = 0;
     g_loadRes = online::loadSettings(g_set);
     if (!g_rec.name[0] && g_set.name[0]) { snprintf(g_rec.name, sizeof g_rec.name, "%s", g_set.name); plat::saveBlob(&g_rec, sizeof g_rec); }
     snprintf(g_set.name, sizeof g_set.name, "%s", player_name());     // the name chosen in the game wins over the file
@@ -356,9 +387,10 @@ void draw_title() {
         bool sel = g_menuSel == i;
         if (sel) blendRect(px + 4, y - 3, pw - 8, 13, rgb(255, 200, 40), 80);
         text(px + 10, y, TR(labels[i]), sel ? rgb(255, 230, 90) : rgb(170, 170, 200));
-        const char* v = i == 0 ? g_trackDefs[g_track].name : (i == 1 ? TR(g_diffNames[g_diff]) : nullptr);
-        if (i == 2) { snprintf(buf, sizeof buf, "%d", kLaps[g_lapsSel]); v = buf; }
-        if (i == 3) v = g_rec.musicOff ? TR("OFF") : g_songs[g_trackDefs[g_track].music].title;
+        const bool tr = g_track == TRACK_TRAINING;
+        const char* v = i == 0 ? (tr ? TR("TRAINING") : track_def(g_track).name) : (i == 1 ? TR(g_diffNames[tr ? DIFF_EASY : g_diff]) : nullptr);
+        if (i == 2) { snprintf(buf, sizeof buf, "%d", tr ? 2 : kLaps[g_lapsSel]); v = buf; }
+        if (i == 3) v = g_rec.musicOff ? TR("OFF") : g_songs[track_def(g_track).music].title;
         if (i == 4) v = i18n::nativeName(i18n::language());
         if (i == 5) v = player_name();
         int vx = px + 124;
@@ -370,18 +402,19 @@ void draw_title() {
         }
         uint16_t vc = rgb(255, 255, 255);
         if (i == 3 && g_rec.musicOff) vc = rgb(150, 150, 170);
-        if (i == 1) { const uint16_t dc[] = { rgb(120, 255, 140), rgb(140, 210, 255), rgb(255, 190, 70), rgb(255, 80, 80) }; vc = dc[g_diff]; }
+        if (i == 1) { const uint16_t dc[] = { rgb(120, 255, 140), rgb(140, 210, 255), rgb(255, 190, 70), rgb(255, 80, 80) }; vc = dc[tr ? DIFF_EASY : g_diff]; }
         if (i == 5) vc = rgb(140, 230, 255);
         textOutline(vx + 66 - textWidth(v) / 2, y, v, vc, rgb(0, 0, 0));
     }
-    text(px + 10, py + 92, TR(kDiffDesc[g_diff]), rgb(150, 150, 180));
+    text(px + 10, py + 92, TR(g_track == TRACK_TRAINING ? "GUIDED LESSONS + VOICE" : kDiffDesc[g_diff]), rgb(150, 150, 180));
 
     // records for the selection
     char t[16];
-    if (g_rec.bestLap[g_track] > 0) { format_time(t, g_rec.bestLap[g_track]); snprintf(buf, sizeof buf, "%s %s", TR("LAP RECORD"), t); }
+    if (g_track == TRACK_TRAINING) buf[0] = 0;
+    else if (g_rec.bestLap[g_track] > 0) { format_time(t, g_rec.bestLap[g_track]); snprintf(buf, sizeof buf, "%s %s", TR("LAP RECORD"), t); }
     else snprintf(buf, sizeof buf, "%s --'--\"--", TR("LAP RECORD"));
     text(px + 10, py + 103, buf, rgb(255, 220, 110));
-    uint8_t bp = g_rec.bestPlace[g_track][g_diff];
+    uint8_t bp = g_track == TRACK_TRAINING ? 0 : g_rec.bestPlace[g_track][g_diff];
     if (bp) { snprintf(buf, sizeof buf, "%s: P%d", TR("BEST"), bp); text(px + pw - 10 - textWidth(buf), py + 103, buf, rgb(255, 220, 110)); }
 
     bool sel = g_menuSel == MI_START;
@@ -430,6 +463,13 @@ void draw_message() {
     int y = 92 + (g_msgT > 1.4f ? (int)((g_msgT - 1.4f) * 80) : 0);
     if (((int)(g_msgT * 10) & 1) || g_msgT < 1.0f)
         textFancy(W / 2 - w / 2, y, g_msg, g_msgTop, g_msgBot, rgb(0, 0, 0), s);
+}
+
+void draw_subtitle(int y) {
+    if (g_subT <= 0 || !g_sub[0][0]) return;
+    int lines = g_sub[1][0] ? 2 : 1;
+    blendRect(0, y - 3, W, lines * 10 + 4, rgb(0, 0, 0), 150);
+    for (int i = 0; i < lines; ++i) textCentered(W / 2, y + i * 10, g_sub[i], rgb(255, 255, 255), rgb(0, 0, 0), 1);
 }
 
 void draw_pause() {
@@ -522,7 +562,7 @@ void draw_online() {
     textCentered(W / 2, 42, msg, mc, rgb(0, 0, 0));
     if (st == plat::NET_CONNECTING && g_stateT > 6) { const char* w = TR("The free server may need a minute to wake up."); text(W / 2 - textWidth(w) / 2, 54, w, grey); }
     if (in.haveSnap) {
-        snprintf(buf, sizeof buf, "%s  -  %d %s", g_trackDefs[in.track % TRACK_COUNT].name, in.laps, in.laps > 1 ? TR("LAPS") : TR("LAP"));
+        snprintf(buf, sizeof buf, "%s  -  %d %s", track_def(in.track % TRACK_COUNT).name, in.laps, in.laps > 1 ? TR("LAPS") : TR("LAP"));
         textCentered(W / 2, 56, buf, white, rgb(0, 0, 0));
         for (int i = 0; i < CAR_COUNT; ++i) {
             const Car& c = g_race.cars[i];
@@ -586,7 +626,7 @@ void handle_events() {
         else if (lastD < 0.8f && d >= 0.8f) message("ENGINE FAILING!", rgb(255, 120, 90), rgb(190, 20, 10), 2.2f);
         lastD = d;
     }
-    if (g_diff <= 1 && g_state == ST_RACING && !g_onlineRace && !g_race.player().retired) {   // coach: one tip per race and per topic
+    if (g_diff <= 1 && g_state == ST_RACING && !g_onlineRace && !training_mode() && !g_race.player().retired) {   // coach: one tip per race and per topic
         const float dtc = 1.0f / 60.0f;
         int cd = 0; float warn = g_race.cornerWarn(&cd);
         g_coachBend = (warn > 0.7f && g_race.speedKmh() > 150.0f) ? g_coachBend + dtc : 0;
@@ -594,6 +634,7 @@ void handle_events() {
         if (!g_tipBend && g_coachBend > 0.6f) { g_tipBend = true; message("BRAKE BEFORE BENDS", rgb(255, 200, 90), rgb(190, 80, 10), 2.2f); }
         else if (!g_tipGrass && g_coachGrass > 1.2f) { g_tipGrass = true; message("GRASS SLOWS YOU DOWN", rgb(170, 230, 130), rgb(40, 120, 30), 2.2f); }
     }
+    if (training_mode() && g_state == ST_RACING) training::update(g_race, coach_say);
     if (e.pitStart) message("PIT STOP", rgb(255, 230, 120), rgb(200, 120, 10), 1.5f);
     if (e.pitDone) { plat::playSfx(plat::SFX_LAP); message(g_race.damage <= 0.01f ? "ENGINE REPAIRED" : "TYRES & TRACKING OK", rgb(160, 255, 200), rgb(20, 160, 90), 1.8f); }
     {   // pit lane: speed limiter, bay names, lollipop
@@ -616,6 +657,7 @@ void handle_events() {
     }
     if (e.finished) {
         plat::playSfx(plat::SFX_FINISH);
+        if (training_mode()) training::finished(coach_say);
         const Car& p = g_race.player();
         static const char* const pos[] = { "", "1ST PLACE!", "2ND PLACE", "3RD PLACE", "4TH PLACE", "5TH PLACE", "6TH PLACE", "7TH PLACE", "8TH PLACE" };
         message(p.place == 1 ? "WINNER!" : "FINISH!", rgb(255, 255, 160), rgb(255, 90, 30), 5.0f);
@@ -675,7 +717,7 @@ void game_frame(const plat::Input& in, float dt) {
         int d = (in.pressed & plat::BTN_RIGHT) ? 1 : ((in.pressed & plat::BTN_LEFT) ? -1 : 0);
         if (d) {
             plat::playSfx(plat::SFX_MENU_MOVE);
-            if (g_menuSel == 0) { g_track = (g_track + d + TRACK_COUNT) % TRACK_COUNT; start_demo(); }
+            if (g_menuSel == 0) { g_track = (g_track + d + TRACK_COUNT + 1) % (TRACK_COUNT + 1); start_demo(); }     // the last entry is the training circuit
             if (g_menuSel == 1) g_diff = (g_diff + d + DIFF_COUNT) % DIFF_COUNT;
             if (g_menuSel == 2) g_lapsSel = (g_lapsSel + d + 4) % 4;
             if (g_menuSel == 3) { g_rec.musicOff ^= 1; apply_music_volume(); plat::saveBlob(&g_rec, sizeof g_rec); }
@@ -736,6 +778,7 @@ void game_frame(const plat::Input& in, float dt) {
         fx_draw();
         if (g_state == ST_RACING || g_stateT < 4.5f) render_hud(g_race, g_time);
         draw_message();
+        if (g_subT > 0) { g_subT -= dt; draw_subtitle(g_state == ST_FINISHED ? 156 : 122); }
         if (g_state == ST_FINISHED) {
             const Car& p = g_race.player();
             char b[24]; snprintf(b, sizeof b, "POSITION %d / %d", p.place, CAR_COUNT);

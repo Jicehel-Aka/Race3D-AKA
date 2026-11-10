@@ -14,6 +14,9 @@ public:
     // background music: song index from music.h, -1 = silence
     void setSong(int song, bool restart = false) { m_songReq = song; m_songRestart = restart; m_songSerial = m_songSerial + 1; }
     void setMusicVolume(float v) { m_musVol = v; }
+    // coach voice: 8 kHz IMA ADPCM clip (4-byte header + 4-bit codes). The bytes are copied into one of two PSRAM buffers.
+    static constexpr int VOICE_MAX = 20000;
+    void playVoice(const uint8_t* data, int bytes);
 
 private:
     struct Voice { const Step* steps = nullptr; int count = 0, cur = 0; float t = 0, phase = 0; };
@@ -22,6 +25,15 @@ private:
     volatile int m_req[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
     volatile unsigned m_reqW = 0;
     unsigned m_reqR = 0;
+
+    uint8_t* m_vbuf[2] = { nullptr, nullptr };
+    volatile int m_vReqBuf = -1, m_vReqLen = 0;
+    volatile unsigned m_vSerial = 0;
+    unsigned m_vSeen = 0;
+    int m_vBuf = -1, m_vLen = 0, m_vPos = 0, m_vPred = 0, m_vIdx = 0, m_vPrev = 0, m_vNext = 0, m_vNib = 0;
+    float m_vFrac = 0;
+    int m_vWrite = 0;
+    int voiceNext();
 
     Voice m_voice[3];
     float m_ePhase = 0, m_ePhase2 = 0, m_eLp = 0, m_rpmS = 0, m_volS = 0;

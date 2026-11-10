@@ -425,7 +425,7 @@ const SceneRule kSceneRules[THEME_COUNT][6] = {
 };
 
 void sceneryPictured(Track& t, std::vector<Prop>& P, int id, int n) {
-    Rng r3(g_trackDefs[id].seed ^ 0x9e3779b9u);
+    Rng r3(track_def(id).seed ^ 0x9e3779b9u);
     int base = SPR_SCEN0 + (int)t.theme * 6;
     for (int i = 20; i < n - 4; ++i) {
         for (int k = 0; k < 6; ++k) {
@@ -438,7 +438,7 @@ void sceneryPictured(Track& t, std::vector<Prop>& P, int id, int n) {
 }
 
 void scenery(Track& t, int id) {
-    Rng r(g_trackDefs[id].seed);
+    Rng r(track_def(id).seed);
     auto& P = t.props;
     int n = t.count();
     float maxY = 0;
@@ -487,7 +487,7 @@ void scenery(Track& t, int id) {
         case THEME_HARBOR:  sceneryHarbor(t, P, r, i, n, maxY); break;
         }
     }
-    Rng r2(g_trackDefs[id].seed ^ 0x5bd1e995u);
+    Rng r2(track_def(id).seed ^ 0x5bd1e995u);
     for (int i = 20; i < n - 4; ++i) dressing(t, P, r2, i, n, maxY);
     sceneryPictured(t, P, id, n);
     P.erase(std::remove_if(P.begin(), P.end(), [&](const Prop& pr) {          // keep the pit complex (apron, safety strip, bays) clear of scenery
@@ -540,7 +540,7 @@ float noise1(Rng& r, float* tbl, int n, float x) {
 }
 
 void backdrop(Track& t) {
-    Rng r(g_trackDefs[t.id].bgSeed);
+    Rng r(track_def(t.id).bgSeed);
     const int W = Track::BG_W;
     float tbl[64];
     for (float& v : tbl) v = r.f();
@@ -629,8 +629,8 @@ bool track_parse_script(Track& t, const char* script, char* err, int errSize) {
 }
 
 void track_build(Track& t, int id) {
-    if (id < 0 || id >= TRACK_COUNT) id = 0;
-    const TrackDef& def = g_trackDefs[id];
+    if (id < 0 || id > TRACK_COUNT) id = 0;
+    const TrackDef& def = track_def(id);
     t.id = id;
     t.theme = def.theme;
     t.name = def.name;

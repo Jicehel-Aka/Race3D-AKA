@@ -28,6 +28,7 @@ void freeLarge(void* p) { free(p); }
 void setEngine(float rpm, float thr, float vol) { s_synth.setEngine(rpm, thr, vol); }
 void setNoise(float rumble, float skid) { s_synth.setNoise(rumble, skid); }
 void playSfx(int id) { s_synth.play(id); }
+void playVoice(const uint8_t* data, size_t bytes) { s_synth.playVoice(data, (int)bytes); }
 void playMusic(int song, bool restart) { s_synth.setSong(song, restart); }
 void setMusicVolume(float v) { s_synth.setMusicVolume(v); }
 bool saveBlob(const void* d, size_t n) {
@@ -48,6 +49,12 @@ void setLanguageCode(const char* code) {
     snprintf(s_lang, sizeof s_lang, "%s", code);
     if (s_headless) return;
     FILE* f = fopen("race3d_lang.txt", "wb"); if (f) { fputs(s_lang, f); fclose(f); }
+}
+int readFile(const char* path, void* buf, size_t cap) {
+    if (!strncmp(path, "/sdcard/", 8)) path += 8;                                   // PC: the race3d folder sits next to the exe
+    FILE* f = fopen(path, "rb"); if (!f) return -1;
+    size_t n = fread(buf, 1, cap + 1, f); fclose(f);
+    return n > cap ? -1 : (int)n;
 }
 bool readTextFile(const char* path, char* buf, size_t cap) {
     const char* base = strrchr(path, '/'); base = base ? base + 1 : path;      // PC: online.txt next to the exe

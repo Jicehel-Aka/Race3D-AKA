@@ -72,6 +72,7 @@ void playSfx(int id) {
     else if (id == SFX_HIT_SOFT) s_player.vibrator(50);
     else if (id == SFX_SCRAPE) s_player.vibrator(80);
 }
+void playVoice(const uint8_t* data, size_t bytes) { s_synth.playVoice(data, (int)bytes); }
 void playMusic(int song, bool restart) { s_synth.setSong(song, restart); }
 void setMusicVolume(float v) { s_synth.setMusicVolume(v); }
 unsigned freeInternalKb() { return (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024); }

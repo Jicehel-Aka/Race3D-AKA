@@ -83,6 +83,10 @@ struct TrackDef {
 };
 constexpr int TRACK_COUNT = 6;
 extern const TrackDef g_trackDefs[TRACK_COUNT];
+// The training circuit (training.cpp) is not one of the numbered circuits: it has no records and is not offered online.
+constexpr int TRACK_TRAINING = TRACK_COUNT;
+extern const TrackDef g_trainingDef;
+inline const TrackDef& track_def(int id) { return id >= TRACK_COUNT ? g_trainingDef : g_trackDefs[id]; }
 
 void track_build(Track& t, int id);
 // Builds only the road from a script (no scenery). Returns false and fills

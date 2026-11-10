@@ -63,6 +63,8 @@ const char* netError();                                          // short reason
 bool        netSend(bool binary, const void* data, size_t len);  // queued; false when the queue is full
 int         netRecv(void* buf, size_t cap, bool* binary);        // next received message, 0 when none
 bool        readTextFile(const char* path, char* buf, size_t cap);   // whole file as a string (SD card)
+int         readFile(const char* path, void* buf, size_t cap);       // binary file (SD card): bytes read, -1 when missing or larger than cap
+void        playVoice(const uint8_t* adpcm, size_t bytes);           // coach voice clip (8 kHz IMA ADPCM, see tools/make_voice.py); copied before returning
 
 // Tiny persistent store (records).
 bool saveBlob(const void* data, size_t size);
