@@ -121,6 +121,7 @@ public:
     float offroad = 0, skid = 0;
     int gear = 1;
     float rpm = 0;
+    float gasGrace = 0;              // seconds left in which the nitro button keeps the throttle after A was lifted
     bool training = false;           // the training circuit (lessons + slow rivals)
     float shiftT = 0;                      // > 0 while the gearbox changes up: engine torque cut
     float pitch = 0;                       // body pitch, -1 squat under power .. +1 dive under braking (visual)

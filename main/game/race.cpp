@@ -228,7 +228,7 @@ void Race::update(float dt, const plat::Input& in) {
     float pct = p.speed / MAX_SPEED;
     int g = 1;
     while (g < 6 && pct > gearTop[g]) ++g;
-    if (g > gear && (in.held & plat::BTN_A) && !autopilot) { shiftT = 0.14f; plat::playSfx(plat::SFX_SHIFT); }      // upshift: torque cut + the revs fall
+    if (g > gear && (in.held & plat::BTN_A) && !autopilot) { shiftT = 0.09f; plat::playSfx(plat::SFX_SHIFT); }      // upshift: torque cut + the revs fall
     gear = g;
     float lo = gearTop[g - 1], hi = g == 6 ? 1.05f : gearTop[g];
     float target = 0.22f + 0.78f * clampf((pct - lo) / (hi - lo), 0, 1);
@@ -248,9 +248,10 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     const Seg& seg = track.at(p.dist);
     float pct = p.speed / MAX_SPEED;
 
-    bool gas = in.held & plat::BTN_A;
-    bool brake = in.held & (plat::BTN_B | plat::BTN_DOWN);
     bool nitroBtn = in.held & (plat::BTN_C | plat::BTN_R1 | plat::BTN_D);
+    if (in.held & plat::BTN_A) gasGrace = 0.2f; else if (gasGrace > 0) gasGrace -= dt;
+    bool gas = (in.held & plat::BTN_A) || (nitroBtn && gasGrace > 0);     // pressing the nitro button on the console pad can lift A for a moment: keep the throttle
+    bool brake = in.held & (plat::BTN_B | plat::BTN_DOWN);
     float target = 0;
     if (in.held & plat::BTN_LEFT) target = -1;
     else if (in.held & plat::BTN_RIGHT) target = 1;
@@ -293,7 +294,7 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     float maxS = MAX_SPEED * perf * (nitroOn || launchBoostT > 0 ? NITRO_BOOST : 1.0f);
     if (onApron) maxS = fminf(maxS, MAX_SPEED * PIT_LIMIT_KMH / 240.0f);                 // pit lane speed limiter
     if (shiftT > 0) shiftT -= dt;
-    float torque = shiftT > 0 ? 0.15f : 1.0f;                                     // power cut while the gearbox changes up
+    float torque = (shiftT > 0 && !nitroOn && launchBoostT <= 0) ? 0.35f : 1.0f;                                     // power cut while the gearbox changes up
     if (gas) p.speed += ACCEL * dt * torque * (nitroOn || launchBoostT > 0 ? 1.9f : 1.0f) * (1.0f - 0.55f * pct * pct) * (0.3f + 0.7f * perf);
     else if (brake) p.speed -= brakeForce(pct) * dt;
     else p.speed -= coastForce(pct) * dt;
@@ -317,7 +318,7 @@ void Race::updatePlayer(float dt, const plat::Input& in) {
     if (inPitZone(p) || (ax > 1.0f && pitIdx(track.indexAt(carZ(p)), track.count()) >= PIT_ENTRY && pitIdx(track.indexAt(carZ(p)), track.count()) <= PIT_END && ax < pitOuter(pitTaper(pitIdx(track.indexAt(carZ(p)), track.count()))))) offroad = 0;   // the apron is tarmac
     else if (ax > 1.12f && p.speed > OFFROAD_LIMIT) p.speed -= OFFROAD_DECEL * dt;
     if (p.retired) p.speed -= MAX_SPEED * 0.35f * dt;          // dead engine: coast down
-    if (p.speed > maxS) p.speed -= MAX_SPEED * (damage > 0.25f ? 0.25f : 0.4f) * dt;   // bleed off after nitro / damage
+    if (p.speed > maxS) p.speed -= MAX_SPEED * (damage > 0.25f ? 0.25f : 0.22f) * dt;   // bleed off after nitro / damage (gently, so the end of the boost is not felt as a cut)
     if (p.speed < 0) p.speed = 0;
     p.x = clampf(p.x, -2.8f, 2.8f);
 
