@@ -412,6 +412,31 @@ void dressing(Track& t, std::vector<Prop>& P, Rng& r, int i, int n, float maxY) 
     }
 }
 
+// Pictured scenery (scen_art): six extra objects per theme, placed from their own generator so the older recipes stay untouched.
+// { nearest offset, farthest offset, every N segments }
+struct SceneRule { float o0, o1; int every; };
+const SceneRule kSceneRules[THEME_COUNT][6] = {
+    /* coast   */ { {1.7f, 3.2f, 47}, {2.4f, 4.0f, 131}, {3.0f, 4.6f, 173}, {1.8f, 3.4f, 71}, {1.6f, 2.8f, 59}, {2.2f, 4.0f, 97} },
+    /* alpine  */ { {1.5f, 2.6f, 17}, {2.6f, 4.2f, 83}, {1.7f, 3.2f, 43}, {1.6f, 2.6f, 61}, {1.8f, 3.0f, 109}, {2.4f, 4.0f, 151} },
+    /* city    */ { {2.0f, 3.0f, 23}, {1.7f, 2.4f, 79}, {1.35f, 1.5f, 29}, {1.5f, 2.0f, 89}, {1.35f, 1.7f, 53}, {1.35f, 1.5f, 67} },
+    /* tropic  */ { {1.5f, 2.6f, 19}, {1.5f, 3.0f, 31}, {2.2f, 3.4f, 101}, {2.0f, 3.4f, 139}, {1.5f, 2.8f, 37}, {1.35f, 1.6f, 41} },
+    /* glacier */ { {1.5f, 2.6f, 21}, {1.6f, 3.0f, 53}, {1.7f, 2.8f, 113}, {1.7f, 3.2f, 37}, {2.2f, 3.4f, 157}, {1.3f, 1.45f, 27} },
+    /* harbor  */ { {2.0f, 3.2f, 91}, {2.0f, 3.2f, 97}, {3.0f, 4.4f, 149}, {1.6f, 2.6f, 43}, {1.4f, 1.8f, 59}, {2.6f, 4.0f, 167} },
+};
+
+void sceneryPictured(Track& t, std::vector<Prop>& P, int id, int n) {
+    Rng r3(g_trackDefs[id].seed ^ 0x9e3779b9u);
+    int base = SPR_SCEN0 + (int)t.theme * 6;
+    for (int i = 20; i < n - 4; ++i) {
+        for (int k = 0; k < 6; ++k) {
+            float sd = rsd(r3); float u = r3.f(); float f = r3.f();
+            const SceneRule& q = kSceneRules[t.theme][k];
+            if ((i + k * 7) % q.every != 0) continue;
+            addProp(P, i, base + k, sd * (q.o0 + (q.o1 - q.o0) * u), f < 0.5f);
+        }
+    }
+}
+
 void scenery(Track& t, int id) {
     Rng r(g_trackDefs[id].seed);
     auto& P = t.props;
@@ -464,6 +489,7 @@ void scenery(Track& t, int id) {
     }
     Rng r2(g_trackDefs[id].seed ^ 0x5bd1e995u);
     for (int i = 20; i < n - 4; ++i) dressing(t, P, r2, i, n, maxY);
+    sceneryPictured(t, P, id, n);
     P.erase(std::remove_if(P.begin(), P.end(), [&](const Prop& pr) {          // keep the pit complex (apron, safety strip, bays) clear of scenery
         int pi = pitIdx(pr.seg, n);
         return pi >= PIT_ENTRY - 2 && pi <= PIT_END + 2 && pr.offset > 0.9f && pr.offset < 3.2f;

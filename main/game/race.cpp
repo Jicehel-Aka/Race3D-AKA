@@ -1,6 +1,7 @@
 // race.cpp - physics and AI.
 #include "race.h"
 #include "gfx.h"
+#include "scen_art.h"
 #include <math.h>
 #include <algorithm>
 
@@ -432,6 +433,7 @@ void Race::addDamage(float d) {
 }
 
 static HitKind hit_kind(int spr) {
+    if (spr >= SPR_SCEN0 && spr <= SPR_SCEN_LAST) return (HitKind)kScene[spr - SPR_SCEN0].hit;
     switch (spr) {
     case SPR_BUSH: case SPR_FLOWERS: case SPR_DUNEGRASS: case SPR_HAYBALE: case SPR_SNOWMAN: case SPR_PARASOL: return HIT_SOFT;
     case SPR_PALM: case SPR_PINE: case SPR_TREE: case SPR_FENCE: case SPR_CRATES: case SPR_HUT: return HIT_WOOD;

@@ -5,6 +5,7 @@
 #include "platform.h"
 #include "car_shadow_art.h"
 #include "tech_art.h"
+#include "scen_art.h"
 #include "font8x8.h"
 #include <math.h>
 #include <string.h>
@@ -1311,12 +1312,17 @@ void sprites_init() {
         Sprite& s = g_sprites[SPR_TECH0 + f];
         s.w = TECH_W; s.h = TECH_H; s.px = const_cast<uint8_t*>(kTechPx[f]); s.worldW = 120; s.hitW = 0;
     }
+    for (int k = 0; k < SCENE_COUNT; ++k) {            // roadside scenery pictures also live in flash
+        Sprite& s = g_sprites[SPR_SCEN0 + k];
+        const SceneArt& a = kScene[k];
+        s.w = a.w; s.h = a.h; s.px = const_cast<uint8_t*>(a.px); s.worldW = a.worldW; s.hitW = a.hitW; s.emissive = a.emissive;
+    }
 }
 
 // ------------------------------------------------------------------ palettes
 // [sprite][theme][16]
 static const int PAL_THEMES = 6;   // THEME_COUNT in track.h
-static uint16_t s_pal[SPR_COUNT][PAL_THEMES][16];
+static uint16_t s_pal[SPR_SCEN0][PAL_THEMES][16];
 static bool s_palReady = false;
 
 static void set_pal(int id, int theme, std::initializer_list<uint16_t> v) {
@@ -1420,6 +1426,7 @@ static void build_palettes() {
 }
 
 const uint16_t* sprite_palette(int id, int theme) {
+    if (id >= SPR_SCEN0) return kScene[id - SPR_SCEN0].pal;   // flash, same colours in every theme (lit_palette applies fog and ambient)
     if (!s_palReady) build_palettes();
     return s_pal[id][theme];
 }
